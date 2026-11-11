@@ -5,6 +5,7 @@ import { useApp, type Theme } from "@/store/app";
 import { useServices } from "@/store/services";
 import { Avatar } from "./Avatar";
 import { Icon, type IconName } from "./Icon";
+import { SettingsDialog } from "./SettingsDialog";
 
 const THEMES: { id: Theme; label: string; icon: IconName }[] = [
   { id: "system", label: "Tizim", icon: "monitor" },
@@ -86,16 +87,20 @@ function Services() {
 }
 
 export function SideMenu({ onClose }: { onClose: () => void }) {
+  const [settings, setSettings] = useState(false);
   const me = useApp((s) => s.me);
   const theme = useApp((s) => s.theme);
   const setTheme = useApp((s) => s.setTheme);
   const logOut = useApp((s) => s.logOut);
 
   useEffect(() => {
+    if (settings) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, settings]);
+
+  if (settings) return <SettingsDialog onClose={onClose} />;
 
   return (
     <>
@@ -130,6 +135,14 @@ export function SideMenu({ onClose }: { onClose: () => void }) {
         </div>
         <div className="my-2 border-t border-border" />
         <Services />
+        <button
+          role="menuitem"
+          className="mb-1 flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-hover"
+          onClick={() => setSettings(true)}
+        >
+          <Icon name="edit" size={18} />
+          Sozlamalar
+        </button>
         <button
           role="menuitem"
           className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-danger hover:bg-danger-soft"

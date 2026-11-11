@@ -2,6 +2,7 @@ import { create } from "zustand";
 import * as api from "@/lib/backend/client";
 import { sendBotStart } from "@/lib/telegram/api";
 import { useApp, type Theme } from "./app";
+import { sanitizePrefs, usePrefs, type Prefs } from "./prefs";
 
 // Tg-crazy xizmatlari (backend): ulanish, tarif, AI, sozlamalar sinxroni.
 
@@ -13,7 +14,7 @@ export type ServicesStatus =
   | "connecting"
   | "connected";
 
-interface SyncedSettings {
+interface SyncedSettings extends Prefs {
   theme: Theme;
   aiLang: api.AiLang;
   /** AI'ga matn yuborishdan oldin har safar so'ramaslik */
@@ -54,7 +55,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export const useServices = create<ServicesState>((set, get) => {
   function snapshot(): SyncedSettings {
-    return { theme: useApp.getState().theme, aiLang: get().aiLang, aiSkipConfirm: get().aiSkipConfirm };
+    const { textSize, wallpaper, notifications } = usePrefs.getState();
+    return { theme: useApp.getState().theme, aiLang: get().aiLang, aiSkipConfirm: get().aiSkipConfirm, textSize, wallpaper, notifications };
   }
 
   function applyRemote(remote: api.RemoteSettings<SyncedSettings>) {
@@ -63,6 +65,8 @@ export const useServices = create<ServicesState>((set, get) => {
     try {
       const { theme, aiLang, aiSkipConfirm } = remote.data;
       if (theme === "system" || theme === "light" || theme === "dark") useApp.getState().setTheme(theme);
+      const prefs = sanitizePrefs(remote.data);
+      if (Object.keys(prefs).length) usePrefs.getState().update(prefs);
       set({
         aiLang: aiLang && ["uz", "uz-cyrl", "ru", "en"].includes(aiLang) ? aiLang : get().aiLang,
         aiSkipConfirm: typeof aiSkipConfirm === "boolean" ? aiSkipConfirm : get().aiSkipConfirm,
@@ -98,6 +102,7 @@ export const useServices = create<ServicesState>((set, get) => {
   useApp.subscribe((state, prev) => {
     if (state.theme !== prev.theme) schedulePush();
   });
+  usePrefs.subscribe(() => schedulePush());
 
   return {
     status: api.backendEnabled ? "checking" : "off",

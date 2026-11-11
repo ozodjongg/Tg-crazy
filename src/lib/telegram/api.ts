@@ -223,6 +223,21 @@ export async function searchInChat(chatId: number, query: string, limit = 50): P
   return res.map(item);
 }
 
+export interface GlobalHit {
+  msg: MessageItem;
+  chatTitle: string;
+}
+
+/** Barcha chatlardagi xabarlar bo'yicha qidiruv (yangidan eskiga). */
+export async function searchGlobal(query: string, limit = 40): Promise<GlobalHit[]> {
+  const client = await getClient();
+  const res = await client.searchGlobal({ query, limit });
+  return res.map((m) => {
+    rememberPeer(m.chat);
+    return { msg: item(m), chatTitle: peerTitle(m.chat) };
+  });
+}
+
 export interface Profile {
   bio: string;
   username: string | null;

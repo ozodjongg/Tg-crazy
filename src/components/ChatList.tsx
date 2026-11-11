@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { buildFolders, filterChats, unreadChats } from "@/lib/chats";
 import { formatChatDate } from "@/lib/format";
-import type { ChatItem } from "@/lib/telegram/types";
+import { searchGlobal, type GlobalHit } from "@/lib/telegram/api";
+import { itemPreview, type ChatItem } from "@/lib/telegram/types";
 import { useApp, type ChatAction } from "@/store/app";
 import { Avatar } from "./Avatar";
 import { Dialog, primaryButton, secondaryButton } from "./Dialog";
@@ -153,6 +154,53 @@ function DeleteChatDialog({ chat, onClose }: { chat: ChatItem; onClose: () => vo
   );
 }
 
+/** Qidiruvda: barcha chatlardagi xabarlar (Telegram serveridan). */
+function MessageHits({ query }: { query: string }) {
+  const openChatAt = useApp((s) => s.openChatAt);
+  const [hits, setHits] = useState<GlobalHit[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const q = query.trim();
+
+  useEffect(() => {
+    if (q.length < 2) return;
+    let alive = true;
+    const timer = setTimeout(() => {
+      searchGlobal(q).then(
+        (h) => alive && (setHits(h), setFailed(false)),
+        () => alive && setFailed(true),
+      );
+    }, 400);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [q]);
+
+  if (q.length < 2) return null;
+  return (
+    <>
+      <li className="px-2.5 pb-1 pt-3 text-xs font-medium text-muted">Xabarlar</li>
+      {failed && <li className="px-2.5 py-2 text-sm text-muted">Qidirib bo&apos;lmadi</li>}
+      {!failed && !hits && <li className="px-2.5 py-2 text-sm text-muted">Qidirilmoqda…</li>}
+      {hits?.length === 0 && <li className="px-2.5 py-2 text-sm text-muted">Xabar topilmadi</li>}
+      {hits?.map(({ msg, chatTitle: title }) => (
+        <li key={`${msg.chatId}:${msg.id}`}>
+          <button className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left hover:bg-hover" onClick={() => void openChatAt(msg.chatId, msg.id)}>
+            <Avatar id={msg.chatId} title={title} size={42} />
+            <span className="min-w-0 flex-1">
+              <span className="flex items-baseline gap-2">
+                <span className="min-w-0 flex-1 truncate font-medium">{title}</span>
+                <span className="shrink-0 text-xs text-muted">{formatChatDate(msg.date)}</span>
+              </span>
+              <span className="block truncate text-sm text-muted">{itemPreview(msg)}</span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </>
+  );
+}
+
 export function ChatList() {
   const chats = useApp((s) => s.chats);
   const activeChatId = useApp((s) => s.activeChatId);
@@ -260,6 +308,7 @@ export function ChatList() {
             </button>
           </li>
         )}
+        {query.trim() && <li className="px-2.5 pb-1 pt-1 text-xs font-medium text-muted">Chatlar</li>}
         {visible.map((chat) => (
           <ChatRow
             key={chat.id}
@@ -270,11 +319,13 @@ export function ChatList() {
             onMenu={(x, y) => setRowMenu({ chat, x, y })}
           />
         ))}
-        {visible.length === 0 && (
+        {visible.length === 0 && !query.trim() && (
           <li className="p-6 text-center text-sm text-muted">
             {chats.length === 0 ? "Chatlar yuklanmoqda…" : archive ? "Arxiv bo'sh" : "Hech narsa topilmadi"}
           </li>
         )}
+        {query.trim() && visible.length === 0 && <li className="px-2.5 py-2 text-sm text-muted">Chat topilmadi</li>}
+        {query.trim() && <MessageHits key={query.trim()} query={query} />}
       </ul>
 
       {error && activeChatId === null && (

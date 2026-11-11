@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useApp } from "@/store/app";
+import { usePrefs } from "@/store/prefs";
 import { useServices } from "@/store/services";
 import { AiDialog } from "./AiDialog";
 import { ChatList } from "./ChatList";
@@ -19,8 +20,15 @@ export function App() {
   const initServices = useServices((s) => s.init);
 
   useEffect(() => {
+    usePrefs.getState().load();
     void init();
   }, [init]);
+
+  // Brauzer sarlavhasida ovozi yoqilgan o'qilmagan chatlar soni
+  const unreadChats = useApp((s) => s.chats.filter((c) => !c.muted && !c.archived && (c.unread > 0 || c.markedUnread)).length);
+  useEffect(() => {
+    document.title = unreadChats > 0 ? `(${unreadChats}) Tg-crazy` : "Tg-crazy";
+  }, [unreadChats]);
 
   // Xizmatlar faqat Telegram'ga kirilgandan keyin tekshiriladi
   useEffect(() => {

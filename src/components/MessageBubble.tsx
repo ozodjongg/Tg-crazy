@@ -169,7 +169,7 @@ export function MessageBubble({
                 )
               )}
               {text && (
-                <div className={`whitespace-pre-wrap break-words leading-snug ${visual ? "px-2 pt-1" : ""}`}>
+                <div className={`msg-text whitespace-pre-wrap break-words leading-snug ${visual ? "px-2 pt-1" : ""}`}>
                   {converted ? text : <RichText text={text} entities={caption.entities} />}
                   {/* Vaqt uchun joy qoldiradi, shunda u matn ustiga chiqmaydi */}
                   <span className={`inline-block ${msg.edited || msg.views !== null ? "w-36" : out ? "w-16" : "w-12"}`} />

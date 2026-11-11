@@ -5,6 +5,7 @@ import { errorText } from "@/lib/telegram/errors";
 import { forgetChatMedia } from "@/lib/telegram/media";
 import { itemPreview, type ChatItem, type ChatKind, type Me, type MessageItem } from "@/lib/telegram/types";
 import { toMarkdown } from "@/lib/markdown";
+import { usePrefs } from "./prefs";
 import { prependOlder, removeMessages, replaceMessage, toggleReaction, upsertMessage } from "@/lib/messages";
 
 export type Theme = "system" | "light" | "dark";
@@ -80,6 +81,8 @@ interface AppState {
   loadOlder: () => Promise<void>;
   loadNewer: () => Promise<void>;
   jumpTo: (messageId: number) => Promise<void>;
+  /** Chatni ochib, berilgan xabarga o'tadi (global qidiruvdan). */
+  openChatAt: (chatId: number, messageId: number) => Promise<void>;
   clearJump: () => void;
   backToLatest: () => Promise<void>;
   cyclePinned: () => void;
@@ -225,6 +228,20 @@ export const useApp = create<AppState>((set, get) => {
       typing: nextTyping,
     });
     if (isActive && !msg.outgoing) void tg.markRead(msg.chatId).catch(() => {});
+    if (!msg.outgoing && !updated.muted && (!isActive || document.hidden)) notify(updated, msg);
+  }
+
+  /** Brauzer bildirishnomasi (ruxsat berilgan va sozlamada yoqilgan bo'lsa). */
+  function notify(chat: ChatItem, msg: MessageItem) {
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    if (!usePrefs.getState().notifications) return;
+    const title = chat.kind === "group" ? `${chat.title}: ${msg.senderName}` : chat.title;
+    const n = new Notification(title, { body: itemPreview(msg) || "Yangi xabar", tag: `chat-${chat.id}` });
+    n.onclick = () => {
+      window.focus();
+      void get().openChat(chat.id);
+      n.close();
+    };
   }
 
   return {
@@ -391,6 +408,11 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     clearJump: () => set({ jumpTarget: null }),
+
+    async openChatAt(chatId, messageId) {
+      await get().openChat(chatId);
+      if (get().activeChatId === chatId) await get().jumpTo(messageId);
+    },
 
     async backToLatest() {
       const chatId = get().activeChatId;

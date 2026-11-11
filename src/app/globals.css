@@ -130,3 +130,39 @@ body {
 .spoiler * {
   color: transparent !important;
 }
+
+/* Chat foni varianti (Sozlamalar) */
+:root[data-wallpaper="plain"] .chat-wallpaper {
+  background-image: none;
+}
+:root[data-wallpaper="warm"] .chat-wallpaper {
+  background-size: auto;
+  background-attachment: local;
+  background-image: linear-gradient(160deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent 55%),
+    linear-gradient(340deg, color-mix(in srgb, #788c5d 14%, transparent), transparent 60%);
+}
+:root[data-wallpaper="paper"] .chat-wallpaper {
+  background-image: repeating-linear-gradient(0deg, var(--chat-dot) 0 1px, transparent 1px 28px);
+  background-size: auto;
+}
+
+/* Xabar matni o'lchami (Sozlamalar) */
+.msg-text {
+  font-size: var(--msg-font, 16px);
+}
+
+/* Sozlamalardagi fon namunalari */
+.wallpaper-preview {
+  background-color: var(--chat-bg);
+}
+.wallpaper-preview[data-preview="dots"] {
+  background-image: radial-gradient(var(--chat-dot) 1px, transparent 1px);
+  background-size: 10px 10px;
+}
+.wallpaper-preview[data-preview="warm"] {
+  background-image: linear-gradient(160deg, color-mix(in srgb, var(--accent) 25%, transparent), transparent 60%),
+    linear-gradient(340deg, color-mix(in srgb, #788c5d 25%, transparent), transparent 60%);
+}
+.wallpaper-preview[data-preview="paper"] {
+  background-image: repeating-linear-gradient(0deg, var(--chat-dot) 0 1px, transparent 1px 12px);
+}
