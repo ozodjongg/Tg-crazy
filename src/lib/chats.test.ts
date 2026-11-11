@@ -7,7 +7,8 @@ import type { ChatItem, ChatKind } from "./telegram/types";
 const chat = (id: number, title: string, kind: ChatKind, unread = 0, muted = false): ChatItem => ({
   id, title, kind, unread, muted,
   lastText: "", lastId: 0, lastDate: null, pinned: false, lastOutgoing: false, lastSender: "", readOutboxMaxId: 0,
-  archived: false, isContact: false, presence: null,
+  archived: false, isContact: false, presence: null, readInboxMaxId: 0, mentions: 0, markedUnread: false,
+  verified: false, isSelf: false, draft: "",
 });
 
 const [ALL, PERSONAL, GROUPS, CHANNELS] = LOCAL_FOLDERS;

@@ -84,3 +84,29 @@ export function pickForAi(list: MessageItem[], maxChars = 30_000, maxCount = 100
   }
   return picked.reverse();
 }
+
+export interface MessageRow {
+  /** Ko'rsatiladigan asosiy xabar (albomda — birinchisi) */
+  msg: MessageItem;
+  /** Albom bo'lsa — uning barcha xabarlari */
+  album: MessageItem[] | null;
+}
+
+/** Ketma-ket, bir xil groupedId li xabarlarni bitta qatorga (albomga) birlashtiradi. */
+export function groupAlbums(list: MessageItem[]): MessageRow[] {
+  const rows: MessageRow[] = [];
+  for (const m of list) {
+    const prev = rows[rows.length - 1];
+    if (m.groupedId && prev && prev.msg.groupedId === m.groupedId && prev.msg.chatId === m.chatId) {
+      prev.album = prev.album ? [...prev.album, m] : [prev.msg, m];
+    } else {
+      rows.push({ msg: m, album: null });
+    }
+  }
+  return rows;
+}
+
+/** Galereya uchun: rasm va videolar (xronologik). */
+export function galleryItems(list: MessageItem[]): MessageItem[] {
+  return list.filter((m) => m.media?.kind === "photo" || m.media?.kind === "video");
+}

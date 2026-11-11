@@ -1,14 +1,15 @@
 import type { Message, TelegramClient } from "@mtcute/web";
 import { getClient } from "./client";
 import { isRpcError } from "./errors";
-import { rememberMedia } from "./media";
+import { rememberMedia, rememberPeer } from "./media";
 import {
-  toChatItem, toMessageItem, peerKind, peerTitle,
-  type ChatItem, type ChatKind, type Me, type MessageItem, type Presence,
+  fromBase64, toChatItem, toMessageItem, toPollInfo, peerKind, peerTitle,
+  type ChatItem, type ChatKind, type Me, type MessageItem, type PollInfo, type Presence,
 } from "./types";
 
 function item(m: Message): MessageItem {
   rememberMedia(m);
+  rememberPeer(m.sender);
   return toMessageItem(m);
 }
 
@@ -74,6 +75,7 @@ export async function loadChats(limit = 200): Promise<ChatItem[]> {
   const client = await getClient();
   const chats: ChatItem[] = [];
   for await (const dialog of client.iterDialogs({ limit })) {
+    rememberPeer(dialog.peer);
     chats.push(toChatItem(dialog));
   }
   return chats;
@@ -181,6 +183,24 @@ export async function sendFile(
     progressCallback: (done, total) => opts.onProgress?.(total > 0 ? done / total : 0),
   });
   return item(sent);
+}
+
+/** So'rovnomada ovoz berish; answers bo'sh bo'lsa ovoz qaytarib olinadi. */
+export async function votePoll(chatId: number, messageId: number, answers: string[]): Promise<PollInfo> {
+  const client = await getClient();
+  const poll = await client.sendVote({
+    chatId, message: messageId, options: answers.length ? answers.map(fromBase64) : null,
+  });
+  return toPollInfo(poll);
+}
+
+/** Bot tugmasi bosilganda: botning qisqa javobi (bo'lsa) va ochiladigan havola. */
+export async function pressButton(
+  chatId: number, messageId: number, data: string,
+): Promise<{ text: string; alert: boolean; url: string | null }> {
+  const client = await getClient();
+  const res = await client.getCallbackAnswer({ chatId, message: messageId, data: fromBase64(data), timeout: 15 });
+  return { text: res.message ?? "", alert: !!res.alert, url: res.url ?? null };
 }
 
 /**

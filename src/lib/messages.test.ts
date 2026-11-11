@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { formatDuration, formatSize, pickForAi, prependOlder, removeMessages, replaceMessage, toggleReaction, upsertMessage } from "./messages";
+import { formatDuration, formatSize, galleryItems, groupAlbums, pickForAi, prependOlder, removeMessages, replaceMessage, toggleReaction, upsertMessage } from "./messages";
 import type { MessageItem } from "./telegram/types";
 
 const msg = (id: number, over: Partial<MessageItem> = {}): MessageItem => ({
   id, chatId: 1, text: `m${id}`, date: id * 1000, outgoing: false, senderId: 2, senderName: "A",
-  service: false, edited: false, replyToId: null, media: null, reactions: [], ...over,
+  service: false, edited: false, replyToId: null, media: null, reactions: [], entities: [], forwardFrom: null,
+  viaBot: null, signature: null, views: null, groupedId: null, webpage: null, poll: null, place: null, contact: null,
+  keyboard: null, mention: false, ...over,
 });
 const ids = (list: MessageItem[]) => list.map((m) => m.id);
 
@@ -77,5 +79,21 @@ describe("pickForAi", () => {
     const list = [msg(1, { text: "a".repeat(10) }), msg(2, { text: "b".repeat(10) }), msg(3, { text: "c".repeat(10) })];
     expect(pickForAi(list, 25).map((m) => m.text[0])).toEqual(["b", "c"]);
     expect(pickForAi(list, 1000, 1).map((m) => m.text[0])).toEqual(["c"]);
+  });
+});
+
+describe("albomlar", () => {
+  it("ketma-ket bir xil groupedId birlashadi", () => {
+    const list = [msg(1), msg(2, { groupedId: "g" }), msg(3, { groupedId: "g" }), msg(4, { groupedId: "h" }), msg(5)];
+    const rows = groupAlbums(list);
+    expect(rows.map((r) => [r.msg.id, r.album?.map((m) => m.id) ?? null])).toEqual([
+      [1, null], [2, [2, 3]], [4, null], [5, null],
+    ]);
+  });
+
+  it("galereyaga faqat rasm va video kiradi", () => {
+    const media = (kind: "photo" | "video" | "file") => ({ kind, fileName: "", size: null, mime: "", width: null, height: null, duration: null });
+    const list = [msg(1, { media: media("photo") }), msg(2, { media: media("file") }), msg(3, { media: media("video") })];
+    expect(galleryItems(list).map((m) => m.id)).toEqual([1, 3]);
   });
 });

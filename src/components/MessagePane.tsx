@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { formatDayLabel, isSameDay } from "@/lib/format";
-import { pickForAi } from "@/lib/messages";
+import { galleryItems, groupAlbums, pickForAi } from "@/lib/messages";
 import type { ChatItem, ChatKind, MessageItem } from "@/lib/telegram/types";
 import { useApp } from "@/store/app";
 import { useServices } from "@/store/services";
@@ -12,6 +12,7 @@ import { Dialog, primaryButton, secondaryButton } from "./Dialog";
 import { ForwardDialog } from "./ForwardDialog";
 import { Icon } from "./Icon";
 import { Logo } from "./Logo";
+import { Lightbox } from "./MediaView";
 import { MessageBubble } from "./MessageBubble";
 import { MessageMenu, type MenuAction } from "./MessageMenu";
 
@@ -107,6 +108,10 @@ export function MessagePane() {
   const [dragOver, setDragOver] = useState(false);
 
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
+  const rows = useMemo(() => groupAlbums(messages), [messages]);
+  const gallery = useMemo(() => galleryItems(messages), [messages]);
+  const [viewing, setViewing] = useState<number | null>(null);
+  const notice = useApp((s) => s.notice);
 
   const scrollToBottom = () => {
     const el = scrollRef.current;
@@ -255,9 +260,9 @@ export function MessagePane() {
             <p className="py-6 text-center text-sm text-muted">Bu yerda hali xabar yo&apos;q</p>
           )}
           <ul className="mx-auto flex max-w-3xl flex-col gap-0.5">
-            {messages.map((msg, i) => {
-              const prev = messages[i - 1];
-              const next = messages[i + 1];
+            {rows.map(({ msg, album }, i) => {
+              const prev = rows[i - 1]?.msg;
+              const next = rows[i + 1]?.msg;
               const newDay = !prev || !isSameDay(prev.date, msg.date);
               const sameAsPrev = !newDay && !!prev && !prev.service && prev.senderId === msg.senderId;
               const sameAsNext =
@@ -271,6 +276,11 @@ export function MessagePane() {
                   )}
                   <MessageBubble
                     msg={msg}
+                    album={album}
+                    onOpenMedia={(m) => {
+                      const index = gallery.findIndex((g) => g.id === m.id);
+                      if (index >= 0) setViewing(index);
+                    }}
                     repliedTo={msg.replyToId !== null ? (byId.get(msg.replyToId) ?? null) : null}
                     inGroup={inGroup}
                     first={!sameAsPrev}
@@ -320,6 +330,14 @@ export function MessagePane() {
           onReact={(emoji) => void react(byId.get(menu.msg.id) ?? menu.msg, emoji)}
           onClose={() => setMenu(null)}
         />
+      )}
+      {viewing !== null && gallery[viewing] && (
+        <Lightbox items={gallery} start={viewing} onClose={() => setViewing(null)} />
+      )}
+      {notice && (
+        <p role="status" className="absolute left-1/2 top-16 z-30 max-w-sm -translate-x-1/2 rounded-2xl bg-text px-4 py-2 text-center text-sm text-bg shadow-lg">
+          {notice}
+        </p>
       )}
       {forwarding && <ForwardDialog msg={forwarding} onClose={() => setForwarding(null)} />}
       {deleting && <DeleteDialog msg={deleting} canChoose={canChooseDelete} onClose={() => setDeleting(null)} />}

@@ -47,6 +47,8 @@ interface AppState {
   upload: { name: string; fraction: number } | null;
   /** Yozish maydonidagi matn */
   draft: string;
+  /** Qisqa xabarnoma (bot javobi va h.k.) */
+  notice: string | null;
 
   init: () => Promise<void>;
   setTheme: (theme: Theme) => void;
@@ -68,6 +70,9 @@ interface AppState {
   forwardMessage: (msg: MessageItem, toChatId: number) => Promise<void>;
   react: (msg: MessageItem, emoji: string) => Promise<void>;
   notifyTyping: () => void;
+  votePoll: (msg: MessageItem, answers: string[]) => Promise<void>;
+  pressButton: (msg: MessageItem, data: string) => Promise<void>;
+  showNotice: (text: string | null) => void;
 }
 
 let phone = "";
@@ -163,22 +168,27 @@ export const useApp = create<AppState>((set, get) => {
     const isActive = msg.chatId === activeChatId;
     const existing = chats.find((c) => c.id === msg.chatId);
     const isNewest = !existing || msg.id >= existing.lastId;
-    const updated: ChatItem = {
+    const base: ChatItem = existing ?? {
       id: msg.chatId,
-      title: existing?.title ?? chat?.title ?? "Chat",
-      kind: existing?.kind ?? chat?.kind ?? (msg.chatId > 0 ? "user" : "group"),
-      pinned: existing?.pinned ?? false,
-      muted: existing?.muted ?? false,
-      archived: existing?.archived ?? false,
-      isContact: existing?.isContact ?? false,
-      presence: existing?.presence ?? null,
-      readOutboxMaxId: existing?.readOutboxMaxId ?? 0,
-      lastId: isNewest ? msg.id : existing.lastId,
-      lastText: isNewest ? itemPreview(msg) : existing.lastText,
-      lastDate: isNewest ? msg.date : existing.lastDate,
-      lastOutgoing: isNewest ? msg.outgoing : existing.lastOutgoing,
-      lastSender: isNewest ? msg.senderName : existing.lastSender,
-      unread: isActive || msg.outgoing ? 0 : (existing?.unread ?? 0) + 1,
+      title: chat?.title ?? "Chat",
+      kind: chat?.kind ?? (msg.chatId > 0 ? "user" : "group"),
+      pinned: false, muted: false, archived: false, isContact: false, presence: null, verified: false,
+      isSelf: msg.chatId === get().me?.id, readOutboxMaxId: 0, readInboxMaxId: 0, mentions: 0,
+      markedUnread: false, draft: "", lastId: 0, lastText: "", lastDate: null, lastOutgoing: false,
+      lastSender: "", unread: 0,
+    };
+    const counts = !isActive && !msg.outgoing;
+    const updated: ChatItem = {
+      ...base,
+      ...(isNewest
+        ? { lastId: msg.id, lastText: itemPreview(msg), lastDate: msg.date, lastOutgoing: msg.outgoing, lastSender: msg.senderName }
+        : {}),
+      unread: counts ? base.unread + 1 : isActive || msg.outgoing ? 0 : base.unread,
+      mentions: counts && msg.mention ? base.mentions + 1 : isActive ? 0 : base.mentions,
+      // Yangi xabar kelsa yoki o'zimiz yozsak — qo'lda qo'yilgan "o'qilmagan" belgisi olinadi
+      markedUnread: msg.outgoing || isActive ? false : base.markedUnread,
+      // Javob yuborilgach qoralama tozalanadi
+      draft: msg.outgoing ? "" : base.draft,
     };
     // Xabar keldi — yuboruvchi endi "yozmayapti"
     const nextTyping = { ...typing };
@@ -209,6 +219,7 @@ export const useApp = create<AppState>((set, get) => {
     typing: {},
     upload: null,
     draft: "",
+    notice: null,
 
     async init() {
       if (initStarted) return;
@@ -383,6 +394,42 @@ export const useApp = create<AppState>((set, get) => {
       } catch (err) {
         if (get().activeChatId === msg.chatId) set({ messages: replaceMessage(get().messages, msg) });
         set({ error: errorText(err) });
+      }
+    },
+
+    async votePoll(msg, answers) {
+      try {
+        const poll = await tg.votePoll(msg.chatId, msg.id, answers);
+        if (get().activeChatId === msg.chatId) {
+          const current = get().messages.find((m) => m.id === msg.id) ?? msg;
+          set({ messages: replaceMessage(get().messages, { ...current, poll }) });
+        }
+      } catch (err) {
+        set({ error: errorText(err) });
+      }
+    },
+
+    async pressButton(msg, data) {
+      try {
+        const res = await tg.pressButton(msg.chatId, msg.id, data);
+        if (res.text) {
+          if (res.alert) window.alert(res.text);
+          else get().showNotice(res.text);
+        }
+        if (res.url && window.confirm(`Havolani ochasizmi?\n${res.url}`)) {
+          window.open(res.url, "_blank", "noopener,noreferrer");
+        }
+      } catch (err) {
+        set({ error: errorText(err) });
+      }
+    },
+
+    showNotice(notice) {
+      set({ notice });
+      if (notice) {
+        setTimeout(() => {
+          if (get().notice === notice) set({ notice: null });
+        }, 4000);
       }
     },
 

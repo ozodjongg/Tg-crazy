@@ -1,13 +1,16 @@
-import type { Message } from "@mtcute/web";
+import type { Message, Peer } from "@mtcute/web";
 import { getClient } from "./client";
 
 // Media obyektlari (mtcute) store'ga tushmaydi — shu registrda saqlanadi va kerak
 // bo'lganda yuklab olinadi. Yuklangan fayllar xotirada blob-URL sifatida keshlanadi.
 
 type Media = NonNullable<Message["media"]>;
+type PeerPhoto = NonNullable<Peer["photo"]>;
 
 const registry = new Map<string, Media>();
 const urls = new Map<string, Promise<string>>();
+const peerPhotos = new Map<number, PeerPhoto>();
+const avatarUrls = new Map<string, Promise<string | null>>();
 
 const key = (chatId: number, msgId: number) => `${chatId}:${msgId}`;
 
@@ -30,10 +33,13 @@ async function download(chatId: number, msgId: number, variant: "preview" | "ful
   if (!media) throw new Error("Media topilmadi");
   const client = await getClient();
 
+  // Havola prevyusidagi rasm
+  const photo = media.type === "photo" ? media : media.type === "webpage" ? media.preview.photo : null;
+
   let location;
-  if (media.type === "photo") {
+  if (photo) {
     // preview: ~320px, full: eng kattasi
-    const sized = [...media.thumbnails].filter((t) => t.width > 0).sort((a, b) => a.width - b.width);
+    const sized = [...photo.thumbnails].filter((t) => t.width > 0).sort((a, b) => a.width - b.width);
     location = variant === "preview" ? (sized.find((t) => t.width >= 320) ?? sized.at(-1)) : sized.at(-1);
     mime = "image/jpeg";
   } else if (variant === "preview" && "thumbnails" in media) {
@@ -58,6 +64,42 @@ export function mediaUrl(chatId: number, msgId: number, variant: "preview" | "fu
     urls.set(k, p);
     // Xato bo'lsa keyingi urinishga yo'l ochamiz
     p.catch(() => urls.delete(k));
+  }
+  return p;
+}
+
+/** Animatsiyali stiker (.tgs — gzip qilingan Lottie JSON) ni ochadi. */
+export async function stickerAnimation(chatId: number, msgId: number): Promise<unknown> {
+  const url = await mediaUrl(chatId, msgId, "full", "application/x-tgsticker");
+  const res = await fetch(url);
+  const stream = res.body!.pipeThrough(new DecompressionStream("gzip"));
+  return JSON.parse(await new Response(stream).text());
+}
+
+// ---- Avatarlar ----
+
+export function rememberPeer(peer: Peer): void {
+  if (peer.photo) peerPhotos.set(peer.id, peer.photo);
+  else peerPhotos.delete(peer.id);
+}
+
+export function hasAvatar(peerId: number): boolean {
+  return peerPhotos.has(peerId);
+}
+
+/** Profil rasmining kichik varianti. Rasm yo'q bo'lsa null. */
+export function avatarUrl(peerId: number, big = false): Promise<string | null> {
+  const photo = peerPhotos.get(peerId);
+  if (!photo) return Promise.resolve(null);
+  // Rasm almashsa yangi kalit — eskisi keshdan foydalanilmaydi
+  const k = `${peerId}:${photo.small.uniqueFileId}:${big ? "b" : "s"}`;
+  let p = avatarUrls.get(k);
+  if (!p) {
+    p = getClient()
+      .then((c) => c.downloadAsBuffer(big ? photo.big : photo.small))
+      .then((bytes) => URL.createObjectURL(new Blob([bytes as BlobPart], { type: "image/jpeg" })));
+    avatarUrls.set(k, p);
+    p.catch(() => avatarUrls.delete(k));
   }
   return p;
 }
