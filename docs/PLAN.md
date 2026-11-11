@@ -197,7 +197,7 @@ Fork bo'lmagani uchun GPL majburiyati yo'q, lekin GPL forklardan **kod ko'chirib
 - [x] Rasmlarni ko'rish; fayl/video/ovozni yuklab olish; fayl yuborish
 - [x] O'qilganlik, "yozmoqda", onlayn holati — jonli; Telegram papkalari
 - [x] Go backend (`backend/`): bot orqali tasdiqlash, tariflar va obuna holati, sozlamalar sinxroni, AI (xulosa, tarjima, javob qoralamasi) kunlik limit bilan
-- [ ] **Egasi:** `api_id`/`api_hash`; BotFather'da bot va tokeni; Anthropic API kaliti; Pro tarifi narxi
+- [ ] **Egasi:** `api_id`/`api_hash`; BotFather'da bot va tokeni; Gemini yoki Anthropic API kaliti; Pro tarifi narxi
 
 **Faza 1b — messenjerni to'ldirish**
 - Stikerlar/GIF/emoji paneli, ovozli xabar yozish, albomlar
