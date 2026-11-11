@@ -6,6 +6,8 @@ serverlariga ulanadi.
 
 - [Tahlil va reja](docs/PLAN.md) — mashhur Telegram klientlari tahlili, API shartlari, yo'l xaritasi.
 
+![Ko'rinish](docs/img/preview.png)
+
 ## Hozir nima bor
 
 Kirish va xabar almashish hali haqiqiy akkauntda sinalmagan — buning uchun `api_id` kerak
@@ -13,8 +15,10 @@ Kirish va xabar almashish hali haqiqiy akkauntda sinalmagan — buning uchun `ap
 
 - Kirish: telefon → kod → ikki bosqichli parol
 - Chatlar ro'yxati (qidiruv lotin/kirillga bog'liq emas), xabarlar tarixi, matn yuborish, yangi xabarlar
-- Lotin ↔ kirill o'girish: har bir xabarda va yozish maydonida (`Aa↔Аа` tugmasi)
-- Mobil ko'rinish, och/to'q mavzu (tizim sozlamasiga qarab)
+- Lotin ↔ kirill o'girish: butun chat, alohida xabar yoki yozish maydoni uchun (`Aa↔Аа` tugmasi)
+- Lokal papkalar: Hammasi / Shaxsiy / Guruhlar / Kanallar
+- Mobil ko'rinish; mavzu: tizim / och / to'q (menyudan)
+- Dizayn: Telegram Web tuzilmasi, iliq krem va "clay" ranglar palitrasi
 
 ## Ishga tushirish
 

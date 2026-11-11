@@ -2,7 +2,24 @@ import { create } from "zustand";
 import * as tg from "@/lib/telegram/api";
 import { hasCredentials } from "@/lib/telegram/client";
 import { errorText } from "@/lib/telegram/errors";
-import type { ChatItem, Me, MessageItem } from "@/lib/telegram/types";
+import type { ChatItem, ChatKind, Me, MessageItem } from "@/lib/telegram/types";
+
+export type Theme = "system" | "light" | "dark";
+const THEME_KEY = "tg-crazy:theme";
+
+function applyTheme(theme: Theme) {
+  if (theme === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = theme;
+}
+
+function readTheme(): Theme {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    return saved === "light" || saved === "dark" ? saved : "system";
+  } catch {
+    return "system";
+  }
+}
 
 export type AuthStep = "loading" | "no-credentials" | "phone" | "code" | "password" | "ready";
 
@@ -11,6 +28,7 @@ interface AppState {
   me: Me | null;
   error: string | null;
   busy: boolean;
+  theme: Theme;
 
   chats: ChatItem[];
   activeChatId: number | null;
@@ -18,6 +36,7 @@ interface AppState {
   messagesLoading: boolean;
 
   init: () => Promise<void>;
+  setTheme: (theme: Theme) => void;
   submitPhone: (phone: string) => Promise<void>;
   submitCode: (code: string) => Promise<void>;
   submitPassword: (password: string) => Promise<void>;
@@ -57,13 +76,17 @@ export const useApp = create<AppState>((set, get) => {
     set({ chats: sortChats(await tg.loadChats()) });
   }
 
-  function handleIncoming(msg: MessageItem, title: string) {
+  function handleIncoming(msg: MessageItem, chat?: { title: string; kind: ChatKind }) {
     const { chats, activeChatId, messages } = get();
     const isActive = msg.chatId === activeChatId;
     const existing = chats.find((c) => c.id === msg.chatId);
     const updated: ChatItem = {
       id: msg.chatId,
-      title: existing?.title ?? title,
+      title: existing?.title ?? chat?.title ?? "Chat",
+      kind: existing?.kind ?? chat?.kind ?? (msg.chatId > 0 ? "user" : "group"),
+      readOutboxMaxId: existing?.readOutboxMaxId ?? 0,
+      lastOutgoing: msg.outgoing,
+      lastSender: msg.senderName,
       pinned: existing?.pinned ?? false,
       muted: existing?.muted ?? false,
       lastText: msg.text,
@@ -83,6 +106,7 @@ export const useApp = create<AppState>((set, get) => {
     me: null,
     error: null,
     busy: false,
+    theme: "system",
     chats: [],
     activeChatId: null,
     messages: [],
@@ -91,6 +115,9 @@ export const useApp = create<AppState>((set, get) => {
     async init() {
       if (initStarted) return;
       initStarted = true;
+      const theme = readTheme();
+      applyTheme(theme);
+      set({ theme });
       if (!hasCredentials()) {
         set({ step: "no-credentials" });
         return;
@@ -102,6 +129,17 @@ export const useApp = create<AppState>((set, get) => {
       } catch (err) {
         set({ step: "phone", error: errorText(err) });
       }
+    },
+
+    setTheme(theme) {
+      applyTheme(theme);
+      try {
+        if (theme === "system") localStorage.removeItem(THEME_KEY);
+        else localStorage.setItem(THEME_KEY, theme);
+      } catch {
+        // Saqlash imkoni bo'lmasa (maxfiy rejim) — tanlov faqat shu seansda amal qiladi
+      }
+      set({ theme });
     },
 
     submitPhone: (value) =>
@@ -155,7 +193,7 @@ export const useApp = create<AppState>((set, get) => {
       try {
         const msg = await tg.sendText(chatId, body);
         // O'z xabarimiz update orqali ham kelishi mumkin — handleIncoming takrorni tashlaydi
-        handleIncoming(msg, "");
+        handleIncoming(msg);
       } catch (err) {
         set({ error: errorText(err) });
         throw err;

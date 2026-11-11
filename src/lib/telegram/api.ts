@@ -1,7 +1,7 @@
 import type { Message } from "@mtcute/web";
 import { getClient } from "./client";
 import { isRpcError } from "./errors";
-import { toChatItem, toMessageItem, peerTitle, type ChatItem, type Me, type MessageItem } from "./types";
+import { toChatItem, toMessageItem, peerKind, peerTitle, type ChatItem, type ChatKind, type Me, type MessageItem } from "./types";
 
 // ---- Kirish ----
 
@@ -91,9 +91,9 @@ export async function markRead(chatId: number): Promise<void> {
   await client.readHistory(chatId);
 }
 
-export async function onNewMessage(handler: (msg: MessageItem, title: string) => void): Promise<() => void> {
+export async function onNewMessage(handler: (msg: MessageItem, chat: { title: string; kind: ChatKind }) => void): Promise<() => void> {
   const client = await getClient();
-  const listener = (m: Message) => handler(toMessageItem(m), peerTitle(m.chat));
+  const listener = (m: Message) => handler(toMessageItem(m), { title: peerTitle(m.chat), kind: peerKind(m.chat) });
   client.onNewMessage.add(listener);
   return () => client.onNewMessage.remove(listener);
 }

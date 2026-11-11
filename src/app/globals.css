@@ -1,45 +1,86 @@
 @import "tailwindcss";
 
+/* Iliq krem + "clay" aksentli palitra. Mavzu: tizim (standart) yoki <html data-theme>. */
 :root {
-  --bg: #ffffff;
-  --panel: #f4f4f5;
-  --border: #e4e4e7;
-  --text: #18181b;
-  --muted: #71717a;
-  --accent: #2563eb;
+  --bg: #faf9f5;
+  --panel: #f0eee6;
+  --hover: #e8e6dc;
+  --border: #e0ddd2;
+  --text: #141413;
+  --muted: #73726c;
+  --accent: #d97757;
+  --accent-hover: #c6613f;
   --accent-text: #ffffff;
+  --accent-soft: #f3ddd3;
   --bubble-in: #ffffff;
-  --bubble-out: #dbeafe;
-  --chat-bg: #eef1f5;
+  --bubble-out: #f3ddd3;
+  --chat-bg: #f5f4ee;
+  --chat-dot: #e4e1d6;
+  --danger: #b53333;
+  --danger-soft: #f6e3e0;
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #18181b;
-    --panel: #1f1f23;
-    --border: #2e2e33;
-    --text: #f4f4f5;
-    --muted: #a1a1aa;
-    --accent: #3b82f6;
+  :root:not([data-theme="light"]) {
+    --bg: #262624;
+    --panel: #1f1e1d;
+    --hover: #30302e;
+    --border: #3a3936;
+    --text: #faf9f5;
+    --muted: #a6a39a;
+    --accent: #d97757;
+    --accent-hover: #e08a6d;
     --accent-text: #ffffff;
-    --bubble-in: #27272a;
-    --bubble-out: #1e3a8a;
-    --chat-bg: #0f0f11;
+    --accent-soft: #4a3229;
+    --bubble-in: #30302e;
+    --bubble-out: #5a3a2e;
+    --chat-bg: #1f1e1d;
+    --chat-dot: #2a2927;
+    --danger: #e88278;
+    --danger-soft: #43262299;
+    color-scheme: dark;
   }
+}
+
+:root[data-theme="dark"] {
+  --bg: #262624;
+  --panel: #1f1e1d;
+  --hover: #30302e;
+  --border: #3a3936;
+  --text: #faf9f5;
+  --muted: #a6a39a;
+  --accent: #d97757;
+  --accent-hover: #e08a6d;
+  --accent-text: #ffffff;
+  --accent-soft: #4a3229;
+  --bubble-in: #30302e;
+  --bubble-out: #5a3a2e;
+  --chat-bg: #1f1e1d;
+  --chat-dot: #2a2927;
+  --danger: #e88278;
+  --danger-soft: #43262299;
+  color-scheme: dark;
 }
 
 @theme inline {
   --color-bg: var(--bg);
   --color-panel: var(--panel);
+  --color-hover: var(--hover);
   --color-border: var(--border);
   --color-text: var(--text);
   --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
   --color-bubble-in: var(--bubble-in);
   --color-bubble-out: var(--bubble-out);
   --color-chat-bg: var(--chat-bg);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", serif;
 }
 
 html,
@@ -51,4 +92,30 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans);
+}
+
+/* Suhbat foni: nozik nuqtali naqsh */
+.chat-wallpaper {
+  background-color: var(--chat-bg);
+  background-image: radial-gradient(var(--chat-dot) 1px, transparent 1px);
+  background-size: 18px 18px;
+}
+
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* base qatlamida: komponentdagi `outline-none` buni bekor qila oladi */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Matn maydonlarida fokus o'rab turgan "kapsula" chegarasi orqali ko'rsatiladi */
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+  }
 }

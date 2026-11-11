@@ -3,10 +3,19 @@ import type { Dialog, Message, Peer } from "@mtcute/web";
 // UI uchun sodda, serializatsiya qilinadigan ko'rinishlar.
 // mtcute obyektlari store'ga tushmaydi.
 
+export type ChatKind = "user" | "bot" | "group" | "channel";
+
 export interface ChatItem {
   id: number;
   title: string;
+  kind: ChatKind;
   lastText: string;
+  /** Oxirgi xabar o'zimizdanmi */
+  lastOutgoing: boolean;
+  /** Oxirgi xabar yuboruvchisi (guruhlarda ko'rsatiladi) */
+  lastSender: string;
+  /** Suhbatdosh o'qigan eng so'nggi chiquvchi xabar ID si */
+  readOutboxMaxId: number;
   lastDate: number | null;
   unread: number;
   pinned: boolean;
@@ -52,11 +61,21 @@ export function messagePreview(msg: Message | null): string {
   return kind ? (labels[kind] ?? "Media") : "";
 }
 
+export function peerKind(peer: Peer): ChatKind {
+  if (peer.type === "user") return peer.isBot ? "bot" : "user";
+  return peer.chatType === "channel" ? "channel" : "group";
+}
+
 export function toChatItem(d: Dialog): ChatItem {
+  const last = d.lastMessage;
   return {
     id: d.peer.id,
     title: peerTitle(d.peer),
-    lastText: messagePreview(d.lastMessage),
+    kind: peerKind(d.peer),
+    lastText: messagePreview(last),
+    lastOutgoing: last?.isOutgoing ?? false,
+    lastSender: last ? peerTitle(last.sender) : "",
+    readOutboxMaxId: d.lastReadOutgoing,
     lastDate: d.lastMessage ? d.lastMessage.date.getTime() : null,
     unread: d.unreadCount,
     pinned: d.isPinned,

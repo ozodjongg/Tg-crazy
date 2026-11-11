@@ -2,21 +2,23 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useApp } from "@/store/app";
+import { Logo } from "./Logo";
 
 const inputClass =
-  "w-full rounded-lg border border-border bg-bg px-3 py-2.5 text-base outline-none focus:border-accent";
+  "w-full rounded-xl border border-border bg-bg px-4 py-3 text-base placeholder:text-muted focus:border-accent";
 const buttonClass =
-  "w-full rounded-lg bg-accent px-3 py-2.5 font-medium text-accent-text disabled:opacity-50";
+  "w-full rounded-xl bg-accent px-4 py-3 font-medium text-accent-text hover:bg-accent-hover disabled:opacity-50 disabled:hover:bg-accent";
 
 function Shell({ title, hint, children }: { title: string; hint: ReactNode; children?: ReactNode }) {
   const error = useApp((s) => s.error);
   return (
     <main className="flex min-h-full items-center justify-center bg-panel p-4">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-bg p-6 shadow-sm">
-        <h1 className="text-xl font-semibold">{title}</h1>
-        <p className="mt-1 text-sm text-muted">{hint}</p>
+      <div className="w-full max-w-sm rounded-3xl border border-border bg-bg p-7">
+        <Logo size={52} />
+        <h1 className="mt-5 font-serif text-3xl">{title}</h1>
+        <p className="mt-2 text-muted">{hint}</p>
         {error && (
-          <p role="alert" className="mt-4 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">
+          <p role="alert" className="mt-4 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">
             {error}
           </p>
         )}
@@ -53,9 +55,9 @@ export function Login() {
         title="Sozlash kerak"
         hint={
           <>
-            <code>.env.local</code> faylida <code>NEXT_PUBLIC_TG_API_ID</code> va{" "}
-            <code>NEXT_PUBLIC_TG_API_HASH</code> ko&apos;rsatilmagan. Ularni my.telegram.org saytidan oling,{" "}
-            <code>.env.example</code> dan nusxa ko&apos;chirib to&apos;ldiring va ilovani qayta ishga tushiring.
+            <code className="rounded bg-panel px-1 text-sm text-text">.env.local</code> faylida <code className="rounded bg-panel px-1 text-sm text-text">NEXT_PUBLIC_TG_API_ID</code> va{" "}
+            <code className="rounded bg-panel px-1 text-sm text-text">NEXT_PUBLIC_TG_API_HASH</code> ko&apos;rsatilmagan. Ularni my.telegram.org saytidan oling,{" "}
+            <code className="rounded bg-panel px-1 text-sm text-text">.env.example</code> dan nusxa ko&apos;chirib to&apos;ldiring va ilovani qayta ishga tushiring.
           </>
         }
       />
@@ -65,7 +67,7 @@ export function Login() {
   if (step === "code") {
     return (
       <Shell title="Kodni kiriting" hint={`${phone} raqamiga Telegram orqali kod yuborildi.`}>
-        <form className="mt-4 space-y-3" onSubmit={on(() => submitCode(code))}>
+        <form className="mt-5 space-y-3" onSubmit={on(() => submitCode(code))}>
           <input
             className={inputClass}
             inputMode="numeric"
@@ -79,7 +81,7 @@ export function Login() {
           <button className={buttonClass} disabled={busy || !code.trim()}>
             {busy ? "Tekshirilmoqda…" : "Davom etish"}
           </button>
-          <button type="button" className="w-full text-sm text-accent" onClick={backToPhone}>
+          <button type="button" className="w-full py-1 text-sm text-accent hover:text-accent-hover" onClick={backToPhone}>
             Raqamni o&apos;zgartirish
           </button>
         </form>
@@ -90,7 +92,7 @@ export function Login() {
   if (step === "password") {
     return (
       <Shell title="Ikki bosqichli parol" hint="Akkauntingizda bulutli parol yoqilgan.">
-        <form className="mt-4 space-y-3" onSubmit={on(() => submitPassword(password))}>
+        <form className="mt-5 space-y-3" onSubmit={on(() => submitPassword(password))}>
           <input
             className={inputClass}
             type="password"
@@ -111,7 +113,7 @@ export function Login() {
 
   return (
     <Shell title="Tg-crazy" hint="Telegram akkauntingizga kirish uchun telefon raqamingizni kiriting.">
-      <form className="mt-4 space-y-3" onSubmit={on(() => submitPhone(phone))}>
+      <form className="mt-5 space-y-3" onSubmit={on(() => submitPhone(phone))}>
         <input
           className={inputClass}
           type="tel"

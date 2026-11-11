@@ -1,95 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { formatTime } from "@/lib/format";
-import type { MessageItem } from "@/lib/telegram/types";
-import { toggleScript } from "@/lib/translit/uz";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { formatDayLabel, isSameDay } from "@/lib/format";
+import type { ChatKind } from "@/lib/telegram/types";
 import { useApp } from "@/store/app";
 import { Avatar } from "./Avatar";
+import { Composer } from "./Composer";
+import { Icon } from "./Icon";
+import { Logo } from "./Logo";
+import { MessageBubble } from "./MessageBubble";
 
-function Bubble({ msg, showSender }: { msg: MessageItem; showSender: boolean }) {
-  const [converted, setConverted] = useState(false);
+const KIND_LABEL: Record<ChatKind, string> = {
+  user: "shaxsiy chat",
+  bot: "bot",
+  group: "guruh",
+  channel: "kanal",
+};
 
-  if (msg.service) {
-    return <li className="mx-auto my-1 rounded-full bg-black/10 px-3 py-0.5 text-xs text-muted">{msg.text}</li>;
-  }
-
+function EmptyState() {
   return (
-    <li className={`group flex items-end gap-1 ${msg.outgoing ? "flex-row-reverse" : ""}`}>
-      <div
-        className={`max-w-[80%] rounded-2xl px-3 py-1.5 shadow-sm md:max-w-[65%] ${
-          msg.outgoing ? "bg-bubble-out" : "bg-bubble-in"
-        }`}
-      >
-        {showSender && <p className="text-xs font-medium text-accent">{msg.senderName}</p>}
-        <p className="whitespace-pre-wrap break-words">{converted ? toggleScript(msg.text) : msg.text}</p>
-        <p className="text-right text-[11px] text-muted">{formatTime(msg.date)}</p>
-      </div>
-      <button
-        className="rounded-full px-2 py-1 text-xs text-muted opacity-60 hover:bg-black/10 hover:opacity-100 md:opacity-0 md:group-hover:opacity-100 md:focus:opacity-100"
-        title="Lotin ↔ kirill"
-        aria-label="Xabarni lotin yoki kirillga o'girish"
-        aria-pressed={converted}
-        onClick={() => setConverted((v) => !v)}
-      >
-        Aa↔Аа
-      </button>
-    </li>
-  );
-}
-
-function Composer() {
-  const send = useApp((s) => s.send);
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-
-  async function submit() {
-    if (!text.trim() || sending) return;
-    setSending(true);
-    try {
-      await send(text);
-      setText("");
-    } catch {
-      // Xato store orqali ko'rsatiladi; matn saqlanib qoladi
-    } finally {
-      setSending(false);
-    }
-  }
-
-  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      void submit();
-    }
-  }
-
-  return (
-    <footer className="flex items-end gap-2 border-t border-border bg-bg p-3">
-      <textarea
-        className="max-h-40 min-h-10 flex-1 resize-none rounded-2xl bg-panel px-4 py-2 outline-none focus:ring-2 focus:ring-accent"
-        rows={1}
-        placeholder="Xabar yozing…"
-        aria-label="Xabar matni"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={onKeyDown}
-      />
-      <button
-        className="rounded-full px-3 py-2 text-sm text-muted hover:bg-panel disabled:opacity-40"
-        title="Yozilgan matnni lotin ↔ kirillga o'girish"
-        disabled={!text.trim()}
-        onClick={() => setText(toggleScript(text))}
-      >
-        Aa↔Аа
-      </button>
-      <button
-        className="rounded-full bg-accent px-4 py-2 font-medium text-accent-text disabled:opacity-50"
-        disabled={!text.trim() || sending}
-        onClick={() => void submit()}
-      >
-        Yuborish
-      </button>
-    </footer>
+    <div className="chat-wallpaper flex flex-1 flex-col items-center justify-center gap-4 p-6 text-center">
+      <Logo size={56} />
+      <h2 className="font-serif text-3xl">Xush kelibsiz</h2>
+      <p className="max-w-xs text-muted">Suhbatni boshlash uchun chap tomondan chatni tanlang.</p>
+    </div>
   );
 }
 
@@ -100,59 +34,133 @@ export function MessagePane() {
   const loading = useApp((s) => s.messagesLoading);
   const error = useApp((s) => s.error);
   const openChat = useApp((s) => s.openChat);
-  const endRef = useRef<HTMLDivElement>(null);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const nearBottom = useRef(true);
+  const [showDown, setShowDown] = useState(false);
+  // Qaysi chat to'liq o'girilgan; boshqa chatga o'tganda o'z-o'zidan o'chadi
+  const [convertedChat, setConvertedChat] = useState<number | null>(null);
+
+  const scrollToBottom = () => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  };
+
+  // Yangi xabar kelganda faqat foydalanuvchi pastda turgan bo'lsa pastga tushamiz
   useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
+    if (nearBottom.current) scrollToBottom();
   }, [messages]);
 
-  if (activeChatId === null) {
-    return (
-      <div className="flex flex-1 items-center justify-center bg-chat-bg text-muted">
-        Suhbatni boshlash uchun chatni tanlang
-      </div>
-    );
+  function onScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    setShowDown(!nearBottom.current);
   }
 
+  if (activeChatId === null) return <EmptyState />;
+
   const title = chat?.title ?? "Chat";
-  // Guruhlarda (manfiy ID) kiruvchi xabarlar ustida yuboruvchi ismi ko'rsatiladi
-  const isGroup = activeChatId < 0;
+  const kind: ChatKind = chat?.kind ?? (activeChatId < 0 ? "group" : "user");
+  const inGroup = kind === "group";
+  const readMaxId = chat?.readOutboxMaxId ?? 0;
+  const convertAll = convertedChat === activeChatId;
 
   return (
     <>
-      <header className="flex items-center gap-3 border-b border-border bg-bg p-3">
+      <header className="flex items-center gap-3 border-b border-border bg-bg px-3 py-2">
         <button
-          className="rounded-full px-2 py-1 text-accent hover:bg-panel md:hidden"
+          className="flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-text md:hidden"
           aria-label="Chatlar ro'yxatiga qaytish"
-          onClick={() => void openChat(null)}
+          onClick={() => {
+            nearBottom.current = true;
+            void openChat(null);
+          }}
         >
-          ←
+          <Icon name="back" />
         </button>
-        <Avatar id={activeChatId} title={title} size={36} />
-        <h2 className="min-w-0 flex-1 truncate font-medium">{title}</h2>
+        <Avatar id={activeChatId} title={title} size={40} />
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate font-medium leading-tight">{title}</h2>
+          <p className="truncate text-sm text-muted">{KIND_LABEL[kind]}</p>
+        </div>
+        <button
+          className={`rounded-full px-3 py-2 text-xs font-medium ${
+            convertAll ? "bg-accent-soft text-accent" : "text-muted hover:bg-hover hover:text-text"
+          }`}
+          title="Barcha xabarlarni lotin ↔ kirillga o'girish"
+          aria-label="Barcha xabarlarni lotin yoki kirillga o'girish"
+          aria-pressed={convertAll}
+          onClick={() => setConvertedChat(convertAll ? null : activeChatId)}
+        >
+          Aa↔Аа
+        </button>
+        {(["search", "more"] as const).map((name) => (
+          <button
+            key={name}
+            disabled
+            title="Tez orada"
+            aria-label={name === "search" ? "Chat ichida qidirish (tez orada)" : "Yana (tez orada)"}
+            className="hidden h-10 w-10 items-center justify-center rounded-full text-muted opacity-50 sm:flex"
+          >
+            <Icon name={name} />
+          </button>
+        ))}
       </header>
-      <div className="flex-1 overflow-y-auto bg-chat-bg p-3">
-        {loading && <p className="py-6 text-center text-sm text-muted">Xabarlar yuklanmoqda…</p>}
-        {!loading && messages.length === 0 && (
-          <p className="py-6 text-center text-sm text-muted">Bu yerda hali xabar yo&apos;q</p>
+
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <div ref={scrollRef} onScroll={onScroll} className="chat-wallpaper thin-scroll flex-1 overflow-y-auto px-3 py-3">
+          {loading && <p className="py-6 text-center text-sm text-muted">Xabarlar yuklanmoqda…</p>}
+          {!loading && messages.length === 0 && (
+            <p className="py-6 text-center text-sm text-muted">Bu yerda hali xabar yo&apos;q</p>
+          )}
+          <ul className="mx-auto flex max-w-3xl flex-col gap-0.5">
+            {messages.map((msg, i) => {
+              const prev = messages[i - 1];
+              const next = messages[i + 1];
+              const newDay = !prev || !isSameDay(prev.date, msg.date);
+              const sameAsPrev = !newDay && !!prev && !prev.service && prev.senderId === msg.senderId;
+              const sameAsNext =
+                !!next && !next.service && next.senderId === msg.senderId && isSameDay(next.date, msg.date);
+              return (
+                <Fragment key={msg.id}>
+                  {newDay && (
+                    <li className="sticky top-0 z-[1] my-2 self-center rounded-full border border-border bg-bg px-3 py-0.5 text-xs font-medium text-muted">
+                      {formatDayLabel(msg.date)}
+                    </li>
+                  )}
+                  <MessageBubble
+                    msg={msg}
+                    inGroup={inGroup}
+                    first={!sameAsPrev}
+                    last={!sameAsNext}
+                    read={msg.id <= readMaxId}
+                    convertAll={convertAll}
+                  />
+                </Fragment>
+              );
+            })}
+          </ul>
+        </div>
+        {showDown && (
+          <button
+            className="absolute bottom-3 right-4 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-bg text-muted shadow-md hover:text-text"
+            aria-label="Eng so'nggi xabarga tushish"
+            onClick={scrollToBottom}
+          >
+            <Icon name="down" />
+          </button>
         )}
-        <ul className="flex flex-col gap-1">
-          {messages.map((msg, i) => (
-            <Bubble
-              key={msg.id}
-              msg={msg}
-              showSender={isGroup && !msg.outgoing && messages[i - 1]?.senderId !== msg.senderId}
-            />
-          ))}
-        </ul>
-        <div ref={endRef} />
       </div>
+
       {error && (
-        <p role="alert" className="bg-red-500/10 px-4 py-2 text-sm text-red-600 dark:text-red-400">
+        <p role="alert" className="mx-3 mb-1 rounded-xl bg-danger-soft px-4 py-2 text-sm text-danger">
           {error}
         </p>
       )}
-      <Composer key={activeChatId} />
+      <div className="chat-wallpaper">
+        <Composer key={activeChatId} />
+      </div>
     </>
   );
 }
