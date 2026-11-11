@@ -43,6 +43,18 @@ interface AppState {
   messagesLoading: boolean;
   hasMore: boolean;
   loadingOlder: boolean;
+  /** Ro'yxat eng so'nggi xabargacha yetmagan (xabarga o'tilganda) */
+  hasNewer: boolean;
+  loadingNewer: boolean;
+  /** "O'qilmagan xabarlar" ajratgichi shu ID dan keyin */
+  unreadAnchor: number | null;
+  /** Ko'rsatilishi (scroll) kerak bo'lgan xabar */
+  jumpTarget: number | null;
+  /** Qadalgan xabarlar (yangidan eskiga) va paneldagi joriy indeks */
+  pinned: MessageItem[];
+  pinnedIndex: number;
+  /** O'ng tomondagi profil paneli */
+  profileOpen: boolean;
   /** Yozish maydoni holati: javob berilayotgan yoki tahrirlanayotgan xabar */
   replyTo: MessageItem | null;
   editing: MessageItem | null;
@@ -65,6 +77,12 @@ interface AppState {
 
   openChat: (chatId: number | null) => Promise<void>;
   loadOlder: () => Promise<void>;
+  loadNewer: () => Promise<void>;
+  jumpTo: (messageId: number) => Promise<void>;
+  clearJump: () => void;
+  backToLatest: () => Promise<void>;
+  cyclePinned: () => void;
+  setProfileOpen: (open: boolean) => void;
   setReplyTo: (msg: MessageItem | null) => void;
   setEditing: (msg: MessageItem | null) => void;
   setDraft: (text: string) => void;
@@ -201,7 +219,7 @@ export const useApp = create<AppState>((set, get) => {
     if (!msg.outgoing) delete nextTyping[msg.chatId];
     set({
       chats: sortChats([updated, ...chats.filter((c) => c.id !== msg.chatId)]),
-      messages: isActive ? upsertMessage(messages, msg) : messages,
+      messages: isActive && !get().hasNewer ? upsertMessage(messages, msg) : messages,
       typing: nextTyping,
     });
     if (isActive && !msg.outgoing) void tg.markRead(msg.chatId).catch(() => {});
@@ -220,6 +238,13 @@ export const useApp = create<AppState>((set, get) => {
     messagesLoading: false,
     hasMore: false,
     loadingOlder: false,
+    hasNewer: false,
+    loadingNewer: false,
+    unreadAnchor: null,
+    jumpTarget: null,
+    pinned: [],
+    pinnedIndex: 0,
+    profileOpen: false,
     replyTo: null,
     editing: null,
     typing: {},
@@ -288,26 +313,103 @@ export const useApp = create<AppState>((set, get) => {
 
     async openChat(chatId) {
       const previous = get().activeChatId;
-      if (previous !== null && previous !== chatId) forgetChatMedia(previous);
+      if (previous !== null && previous !== chatId) {
+        forgetChatMedia(previous);
+        // Yozilgan, lekin yuborilmagan matn qoralama sifatida saqlanadi
+        const left = get().chats.find((c) => c.id === previous);
+        const text = get().editing ? left?.draft ?? "" : get().draft;
+        if (left && text !== left.draft) {
+          set({ chats: get().chats.map((c) => (c.id === previous ? { ...c, draft: text } : c)) });
+          void tg.saveDraft(previous, text).catch(() => {});
+        }
+      }
+      const chat = get().chats.find((c) => c.id === chatId);
+      const anchor = chat && chat.unread > 0 && chat.readInboxMaxId > 0 ? chat.readInboxMaxId : null;
       set({
-        activeChatId: chatId, messages: [], messagesLoading: chatId !== null, hasMore: false,
-        loadingOlder: false, replyTo: null, editing: null, error: null, upload: null, draft: "",
+        activeChatId: chatId, messages: [], messagesLoading: chatId !== null, hasMore: false, hasNewer: false,
+        loadingOlder: false, loadingNewer: false, replyTo: null, editing: null, error: null, upload: null,
+        draft: chat?.draft ?? "", unreadAnchor: anchor, jumpTarget: null, pinned: [], pinnedIndex: 0,
       });
       if (chatId === null) return;
+      // Qadalgan xabarlar fonda yuklanadi
+      tg.loadShared(chatId, "pinned", 20).then(
+        (pinned) => get().activeChatId === chatId && set({ pinned, pinnedIndex: 0 }),
+        () => {},
+      );
       try {
-        const messages = await tg.loadHistory(chatId);
+        // O'qilmaganlar ko'p bo'lsa birinchi o'qilmagan atrofidan ochamiz
+        const fromAnchor = anchor !== null && chat!.unread > tg.PAGE_SIZE - 10;
+        const messages = fromAnchor ? await tg.loadAround(chatId, anchor) : await tg.loadHistory(chatId);
         if (get().activeChatId !== chatId) return;
         set({
           messages,
           messagesLoading: false,
-          hasMore: messages.length >= tg.PAGE_SIZE,
-          chats: get().chats.map((c) => (c.id === chatId ? { ...c, unread: 0 } : c)),
+          hasMore: messages.length >= tg.PAGE_SIZE / 2,
+          hasNewer: fromAnchor,
+          chats: get().chats.map((c) => (c.id === chatId ? { ...c, unread: 0, mentions: 0, markedUnread: false } : c)),
         });
         void tg.markRead(chatId).catch(() => {});
       } catch (err) {
         if (get().activeChatId === chatId) set({ messagesLoading: false, error: errorText(err) });
       }
     },
+
+    async loadNewer() {
+      const { activeChatId: chatId, messages, hasNewer, loadingNewer } = get();
+      const newest = messages[messages.length - 1];
+      if (chatId === null || !newest || !hasNewer || loadingNewer) return;
+      set({ loadingNewer: true });
+      try {
+        const newer = await tg.loadNewer(chatId, newest.id);
+        if (get().activeChatId !== chatId) return;
+        let list = get().messages;
+        for (const m of newer) list = upsertMessage(list, m);
+        set({ messages: list, hasNewer: newer.length >= tg.PAGE_SIZE / 2 });
+      } catch (err) {
+        if (get().activeChatId === chatId) set({ error: errorText(err) });
+      } finally {
+        if (get().activeChatId === chatId) set({ loadingNewer: false });
+      }
+    },
+
+    async jumpTo(messageId) {
+      const chatId = get().activeChatId;
+      if (chatId === null) return;
+      if (get().messages.some((m) => m.id === messageId)) {
+        set({ jumpTarget: messageId });
+        return;
+      }
+      try {
+        const around = await tg.loadAround(chatId, messageId);
+        if (get().activeChatId !== chatId) return;
+        set({ messages: around, hasMore: true, hasNewer: true, jumpTarget: messageId });
+      } catch (err) {
+        set({ error: errorText(err) });
+      }
+    },
+
+    clearJump: () => set({ jumpTarget: null }),
+
+    async backToLatest() {
+      const chatId = get().activeChatId;
+      if (chatId === null || !get().hasNewer) return;
+      try {
+        const messages = await tg.loadHistory(chatId);
+        if (get().activeChatId !== chatId) return;
+        set({ messages, hasMore: messages.length >= tg.PAGE_SIZE, hasNewer: false, jumpTarget: messages.at(-1)?.id ?? null });
+      } catch (err) {
+        set({ error: errorText(err) });
+      }
+    },
+
+    cyclePinned() {
+      const { pinned, pinnedIndex } = get();
+      if (pinned.length === 0) return;
+      void get().jumpTo(pinned[pinnedIndex].id);
+      set({ pinnedIndex: (pinnedIndex + 1) % pinned.length });
+    },
+
+    setProfileOpen: (profileOpen) => set({ profileOpen }),
 
     async loadOlder() {
       const { activeChatId: chatId, messages, hasMore, loadingOlder } = get();
@@ -346,6 +448,8 @@ export const useApp = create<AppState>((set, get) => {
         set({ replyTo: null, draft: "" });
         // O'z xabarimiz update orqali ham kelishi mumkin — upsert takrorni birlashtiradi
         handleIncoming(msg);
+        // Eski joyda turgan bo'lsak — yuborilgan xabarni ko'rish uchun oxiriga qaytamiz
+        if (get().hasNewer) void get().backToLatest();
       } catch (err) {
         fail(err);
       }

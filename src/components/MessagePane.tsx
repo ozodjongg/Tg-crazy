@@ -3,7 +3,8 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { formatDayLabel, isSameDay } from "@/lib/format";
 import { galleryItems, groupAlbums, pickForAi } from "@/lib/messages";
-import type { ChatItem, ChatKind, MessageItem } from "@/lib/telegram/types";
+import { itemPreview, type ChatItem, type ChatKind, type MessageItem } from "@/lib/telegram/types";
+import { ChatSearch } from "./ChatSearch";
 import { useApp } from "@/store/app";
 import { useServices } from "@/store/services";
 import { Avatar } from "./Avatar";
@@ -25,6 +26,7 @@ const KIND_LABEL: Record<ChatKind, string> = {
 };
 
 function subtitle(chat: ChatItem | null, kind: ChatKind, typing: boolean): { text: string; accent: boolean } {
+  if (chat?.isSelf) return { text: "", accent: false };
   if (typing) return { text: kind === "user" ? "yozmoqda…" : "kimdir yozmoqda…", accent: true };
   if (chat?.presence === "online") return { text: "onlayn", accent: true };
   if (chat?.presence === "recently") return { text: "yaqinda bo'lgan", accent: false };
@@ -113,6 +115,21 @@ export function MessagePane() {
   const gallery = useMemo(() => galleryItems(messages), [messages]);
   const [viewing, setViewing] = useState<number | null>(null);
   const notice = useApp((s) => s.notice);
+  const hasNewer = useApp((s) => s.hasNewer);
+  const unreadAnchor = useApp((s) => s.unreadAnchor);
+  const jumpTarget = useApp((s) => s.jumpTarget);
+  const pinned = useApp((s) => s.pinned);
+  const pinnedIndex = useApp((s) => s.pinnedIndex);
+  const profileOpen = useApp((s) => s.profileOpen);
+  const loadNewer = useApp((s) => s.loadNewer);
+  const storeJumpTo = useApp((s) => s.jumpTo);
+  const clearJump = useApp((s) => s.clearJump);
+  const backToLatest = useApp((s) => s.backToLatest);
+  const cyclePinned = useApp((s) => s.cyclePinned);
+  const setProfileOpen = useApp((s) => s.setProfileOpen);
+  const [searchOpen, setSearchOpen] = useState(false);
+  /** Qaysi chat uchun boshlang'ich joy (o'qilmaganlar yoki oxiri) tanlangan */
+  const positionedFor = useRef<number | null>(null);
 
   const scrollToBottom = () => {
     const el = scrollRef.current;
@@ -121,7 +138,21 @@ export function MessagePane() {
 
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (!el) return;
+    if (!el || messages.length === 0) return;
+    if (positionedFor.current !== activeChatId) {
+      // Chat ochildi: birinchi o'qilmagan xabarga yoki oxiriga
+      positionedFor.current = activeChatId;
+      const sep = el.querySelector<HTMLElement>("#unread-separator");
+      if (sep) {
+        // Yuqoridagi sana belgisi ajratgichni yopmasligi uchun biroz joy qoldiramiz
+        el.scrollTop = sep.offsetTop - el.offsetTop - 56;
+        nearBottom.current = false;
+      } else {
+        scrollToBottom();
+        nearBottom.current = true;
+      }
+      return;
+    }
     if (heightBeforeOlder.current !== null) {
       // Tepaga eski xabarlar qo'shildi: ko'rinib turgan joy siljimasin
       el.scrollTop += el.scrollHeight - heightBeforeOlder.current;
@@ -130,7 +161,18 @@ export function MessagePane() {
       // Yangi xabar kelganda faqat foydalanuvchi pastda turgan bo'lsa pastga tushamiz
       scrollToBottom();
     }
-  }, [messages]);
+  }, [messages, activeChatId]);
+
+  // Xabarga o'tish (qadalgan, javob, qidiruv): markazga keltirib, qisqa yoritamiz
+  useEffect(() => {
+    if (jumpTarget === null) return;
+    const el = document.getElementById(`msg-${jumpTarget}`);
+    if (el) {
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      el.animate([{ backgroundColor: "var(--accent-soft)" }, { backgroundColor: "transparent" }], { duration: 1400 });
+    }
+    clearJump();
+  }, [jumpTarget, messages, clearJump]);
 
   useEffect(() => {
     if (!error) return;
@@ -142,7 +184,8 @@ export function MessagePane() {
     const el = scrollRef.current;
     if (!el) return;
     nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
-    setShowDown(!nearBottom.current);
+    setShowDown(!nearBottom.current || hasNewer);
+    if (nearBottom.current && hasNewer) void loadNewer();
     if (el.scrollTop < 200 && hasMore && !loadingOlder && !loading) {
       heightBeforeOlder.current = el.scrollHeight;
       void loadOlder();
@@ -161,12 +204,8 @@ export function MessagePane() {
   const canChooseDelete = activeChatId > -1_000_000_000_000;
   const flipKey = (m: MessageItem) => `${m.chatId}:${m.id}`;
 
-  function jumpTo(id: number) {
-    const el = document.getElementById(`msg-${id}`);
-    if (!el) return;
-    el.scrollIntoView({ block: "center", behavior: "smooth" });
-    el.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 900 });
-  }
+  const jumpTo = (id: number) => void storeJumpTo(id);
+  const currentPinned = pinned[pinnedIndex] ?? null;
 
   function actionsFor(msg: MessageItem): MenuAction[] {
     const list: MenuAction[] = [{ key: "reply", label: "Javob berish", icon: "reply", run: () => setReplyTo(msg) }];
@@ -225,13 +264,33 @@ export function MessagePane() {
         >
           <Icon name="back" />
         </button>
-        <Avatar id={activeChatId} title={title} size={40} saved={chat?.isSelf} />
-        <div className="min-w-0 flex-1 pl-1">
-          <h2 className="truncate font-medium leading-tight">{title}</h2>
-          <p className={`truncate text-sm ${sub.accent ? "text-accent" : "text-muted"}`} aria-live="polite">
-            {sub.text}
-          </p>
-        </div>
+        <button
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-0.5 text-left"
+          aria-label="Profilni ochish"
+          onClick={() => setProfileOpen(!profileOpen)}
+        >
+          <Avatar id={activeChatId} title={title} size={40} saved={chat?.isSelf} />
+          <span className="min-w-0 flex-1">
+            <span className="flex items-center gap-1">
+              <span className="truncate font-medium leading-tight">{title}</span>
+              {chat?.verified && <Icon name="verified" size={15} className="shrink-0 text-accent" />}
+            </span>
+            {sub.text && (
+              <span className={`block truncate text-sm ${sub.accent ? "text-accent" : "text-muted"}`} aria-live="polite">
+                {sub.text}
+              </span>
+            )}
+          </span>
+        </button>
+        <button
+          className={`${headerButton} ${searchOpen ? "bg-accent-soft text-accent" : ""}`}
+          title="Chat ichida qidirish"
+          aria-label="Chat ichida qidirish"
+          aria-pressed={searchOpen}
+          onClick={() => setSearchOpen((v) => !v)}
+        >
+          <Icon name="search" />
+        </button>
         {aiReady && (
           <button
             className={headerButton}
@@ -252,6 +311,27 @@ export function MessagePane() {
           Aa↔Аа
         </button>
       </header>
+      {searchOpen && <ChatSearch chatId={activeChatId} onPick={jumpTo} onClose={() => setSearchOpen(false)} />}
+      {currentPinned && (
+        <button
+          className="flex items-center gap-3 border-b border-border bg-bg px-4 py-1.5 text-left hover:bg-hover"
+          onClick={cyclePinned}
+          aria-label="Qadalgan xabarga o'tish"
+        >
+          <span className="flex h-8 flex-col gap-0.5" aria-hidden>
+            {pinned.slice(0, 4).map((p, i) => (
+              <span key={p.id} className={`w-0.5 flex-1 rounded-full ${i === pinnedIndex % 4 ? "bg-accent" : "bg-accent/30"}`} />
+            ))}
+          </span>
+          <span className="min-w-0 flex-1 text-sm">
+            <span className="block font-medium text-accent">
+              Qadalgan xabar{pinned.length > 1 ? ` ${pinnedIndex + 1}/${pinned.length}` : ""}
+            </span>
+            <span className="block truncate text-muted">{itemPreview(currentPinned) || "Xabar"}</span>
+          </span>
+          <Icon name="pin" size={18} className="shrink-0 text-muted" />
+        </button>
+      )}
 
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div ref={scrollRef} onScroll={onScroll} className="chat-wallpaper thin-scroll flex-1 overflow-y-auto px-3 py-3">
@@ -270,6 +350,11 @@ export function MessagePane() {
                 !!next && !next.service && next.senderId === msg.senderId && isSameDay(next.date, msg.date);
               return (
                 <Fragment key={msg.id}>
+                  {unreadAnchor !== null && msg.id > unreadAnchor && !msg.outgoing && (!prev || prev.id <= unreadAnchor) && (
+                    <li id="unread-separator" className="my-2 -mx-3 bg-accent/10 py-1 text-center text-xs font-medium text-accent">
+                      O&apos;qilmagan xabarlar
+                    </li>
+                  )}
                   {newDay && (
                     <li className="sticky top-0 z-[1] my-2 self-center rounded-full border border-border bg-bg px-3 py-0.5 text-xs font-medium text-muted">
                       {formatDayLabel(msg.date)}
@@ -297,11 +382,11 @@ export function MessagePane() {
             })}
           </ul>
         </div>
-        {showDown && (
+        {(showDown || hasNewer) && (
           <button
             className="absolute bottom-3 right-4 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-bg text-muted shadow-md hover:text-text"
             aria-label="Eng so'nggi xabarga tushish"
-            onClick={scrollToBottom}
+            onClick={() => (hasNewer ? void backToLatest() : scrollToBottom())}
           >
             <Icon name="down" />
           </button>

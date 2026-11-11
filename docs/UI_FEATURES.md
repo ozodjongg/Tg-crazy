@@ -43,12 +43,12 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 
 | Funksiya | Holat |
 |---|---|
-| Qadalgan xabar paneli (bosilsa o'sha xabarga o'tadi) | ⬜ |
-| "O'qilmagan xabarlar" ajratgichi, birinchi o'qilmaganga ochilish | ⬜ |
-| Chat ichida qidiruv | ⬜ |
-| Profil paneli: rasm, bio/tavsif, username, telefon, a'zolar soni | ⬜ |
-| Profil panelida umumiy media: rasmlar, fayllar, havolalar, ovozlar | ⬜ |
-| Guruh a'zolari ro'yxati | ⬜ |
+| Qadalgan xabar paneli (bosilsa o'sha xabarga o'tadi) | ✅ |
+| "O'qilmagan xabarlar" ajratgichi, birinchi o'qilmaganga ochilish | ✅ |
+| Chat ichida qidiruv | ✅ |
+| Profil paneli: rasm, bio/tavsif, username, telefon, a'zolar soni | ✅ |
+| Profil panelida umumiy media: rasmlar, fayllar, havolalar, ovozlar | ✅ |
+| Guruh a'zolari ro'yxati | ✅ |
 | Xabarlarni ko'p tanlash (uzatish/o'chirish) | ⬜ |
 | Forum mavzulari (topics) | ⬜ |
 | Kanal izohlari (comments) | ⬜ |
@@ -60,7 +60,7 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Emoji paneli (toifalar, qidiruv, so'nggilar) | ⬜ |
 | Formatlash: **qalin**, __kursiv__, `kod`, ~~o'chirilgan~~, \|\|spoiler\|\| va Ctrl+B / Ctrl+I | ⬜ |
 | Rasmni joylashtirish (Ctrl+V) | ⬜ |
-| Qoralamalarni saqlash (chat almashtirganda yo'qolmaydi, Telegram bilan sinxron) | ⬜ |
+| Qoralamalarni saqlash (chat almashtirganda yo'qolmaydi, Telegram bilan sinxron) | ✅ |
 | Stiker paneli (o'rnatilgan to'plamlar) | ⬜ |
 | Ovozsiz yuborish, vaqtga rejalashtirish | ⬜ |
 | Ovozli xabar yozish (mikrofon) | ⬜ |

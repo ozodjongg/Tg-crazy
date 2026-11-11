@@ -3,7 +3,7 @@ import { getClient } from "./client";
 import { isRpcError } from "./errors";
 import { rememberMedia, rememberPeer } from "./media";
 import {
-  fromBase64, toChatItem, toMessageItem, toPollInfo, peerKind, peerTitle,
+  fromBase64, toChatItem, toMessageItem, toPollInfo, peerKind, peerPresence, peerTitle,
   type ChatItem, type ChatKind, type Me, type MessageItem, type PollInfo, type Presence,
 } from "./types";
 
@@ -177,6 +177,92 @@ export async function loadHistory(chatId: number, before?: HistoryCursor): Promi
   const client = await getClient();
   const messages = await client.getHistory(chatId, { limit: PAGE_SIZE, offset: before });
   return messages.map(item).reverse();
+}
+
+/** Berilgan xabar atrofidagi sahifa (unga o'tish uchun), eskidan yangiga. */
+export async function loadAround(chatId: number, messageId: number): Promise<MessageItem[]> {
+  const client = await getClient();
+  const half = Math.floor(PAGE_SIZE / 2);
+  const messages = await client.getHistory(chatId, {
+    limit: PAGE_SIZE, offset: { id: messageId + 1, date: 0 }, addOffset: -half,
+  });
+  return messages.map(item).reverse();
+}
+
+/** newestId dan keyingi (yangiroq) xabarlar, eskidan yangiga. */
+export async function loadNewer(chatId: number, newestId: number): Promise<MessageItem[]> {
+  const client = await getClient();
+  const messages = await client.getHistory(chatId, {
+    limit: PAGE_SIZE, offset: { id: newestId + 1, date: 0 }, addOffset: -PAGE_SIZE,
+  });
+  return messages.map(item).filter((m) => m.id > newestId).sort((a, b) => a.id - b.id);
+}
+
+export type SharedKind = "media" | "files" | "links" | "voice" | "pinned";
+
+const FILTERS = {
+  media: { _: "inputMessagesFilterPhotoVideo" },
+  files: { _: "inputMessagesFilterDocument" },
+  links: { _: "inputMessagesFilterUrl" },
+  voice: { _: "inputMessagesFilterRoundVoice" },
+  pinned: { _: "inputMessagesFilterPinned" },
+} as const;
+
+/** Chatdagi umumiy media/fayl/havolalar yoki qadalgan xabarlar (yangidan eskiga). */
+export async function loadShared(chatId: number, kind: SharedKind, limit = 60): Promise<MessageItem[]> {
+  const client = await getClient();
+  const res = await client.searchMessages({ chatId, filter: FILTERS[kind], limit });
+  return res.map(item);
+}
+
+/** Chat ichida matn bo'yicha qidiruv (yangidan eskiga). */
+export async function searchInChat(chatId: number, query: string, limit = 50): Promise<MessageItem[]> {
+  const client = await getClient();
+  const res = await client.searchMessages({ chatId, query, limit });
+  return res.map(item);
+}
+
+export interface Profile {
+  bio: string;
+  username: string | null;
+  phone: string | null;
+  members: number | null;
+  online: number | null;
+}
+
+export async function loadProfile(chatId: number): Promise<Profile> {
+  const client = await getClient();
+  if (chatId > 0) {
+    const u = await client.getFullUser(chatId);
+    rememberPeer(u);
+    return { bio: u.bio, username: u.username, phone: u.phoneNumber, members: null, online: null };
+  }
+  const c = await client.getFullChat(chatId);
+  rememberPeer(c);
+  return { bio: c.bio, username: c.username, phone: null, members: c.membersCount || null, online: c.onlineCount || null };
+}
+
+export interface Member {
+  id: number;
+  name: string;
+  role: "creator" | "admin" | "member";
+  presence: Presence;
+}
+
+export async function loadMembers(chatId: number, limit = 100): Promise<Member[]> {
+  const client = await getClient();
+  const res = await client.getChatMembers(chatId, { limit, type: "recent" });
+  return res.map((m) => {
+    rememberPeer(m.user);
+    const role = m.status === "creator" || m.status === "admin" ? m.status : "member";
+    return { id: m.user.id, name: peerTitle(m.user), role, presence: peerPresence(m.user) };
+  });
+}
+
+/** Qoralamani Telegram'da saqlaydi (boshqa qurilmalarda ham ko'rinadi); bo'sh matn — o'chiradi. */
+export async function saveDraft(chatId: number, text: string): Promise<void> {
+  const client = await getClient();
+  await client.saveDraft(chatId, text.trim() ? { message: text } : null);
 }
 
 export async function sendText(chatId: number, text: string, replyTo?: number): Promise<MessageItem> {

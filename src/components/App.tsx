@@ -8,11 +8,13 @@ import { ChatList } from "./ChatList";
 import { Login } from "./Login";
 import { Logo } from "./Logo";
 import { MessagePane } from "./MessagePane";
+import { ProfilePanel } from "./ProfilePanel";
 
 export function App() {
   const step = useApp((s) => s.step);
   const init = useApp((s) => s.init);
   const activeChatId = useApp((s) => s.activeChatId);
+  const profileOpen = useApp((s) => s.profileOpen);
 
   const initServices = useServices((s) => s.init);
 
@@ -47,6 +49,12 @@ export function App() {
       <section className={`${activeChatId === null ? "hidden" : "flex"} min-w-0 flex-1 flex-col md:flex`}>
         <MessagePane />
       </section>
+      {/* Keng ekranda uchinchi ustun, torda — ustiga ochiladi */}
+      {profileOpen && activeChatId !== null && (
+        <div className="fixed inset-0 z-20 xl:static xl:z-auto xl:w-[360px] xl:shrink-0">
+          <ProfilePanel />
+        </div>
+      )}
       <AiDialog />
     </main>
   );
