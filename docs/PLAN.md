@@ -2,7 +2,7 @@
 
 > Holat: 2026-yil noyabr. Hujjat ikki qismdan iborat: (1) Telegram API ustida qurilgan mashhur
 > ilovalar tahlili — ular nima qilgan va nega aynan shunday qilgan; (2) shulardan olingan
-> xulosalar asosidagi mahsulot va texnik reja.
+> xulosalar asosidagi mahsulot va texnik reja (§5 — Next.js yo'nalishi).
 >
 > Ishonchlilik haqida: arxitektura va litsenziya ma'lumotlari loyihalarning ochiq kodiga
 > asoslangan. Yopiq kodli ilovalar (iMe, Turrit, Nicegram'ning bir qismi) haqidagi funksiyalar
@@ -135,6 +135,8 @@ O'chirilgan xabarlar tarixi — kulrang zona; MVP'ga kirmaydi, keyin alohida ko'
 | 17 | Google'siz build, reproducible build | Mercurygram, Telegram-FOSS | ✅ | 3 |
 | ✗ | Ghost mode, self-destruct saqlash, reklama bloklash, lokal Premium | AyuGram va b. | ❌ | — |
 
+Jadvaldagi "Faza" ustuni avvalgi (fork) rejaga tegishli; amaldagi taqsimot §5.4 da.
+
 **Pozitsiya:** "AyuGram'dek kuchli, lekin akkauntingni xavfga qo'ymaydi va ochiq" —
 toza dizayn (exteraGram) + nazorat (Nagram) + AI (iMe) + to'liq ochiq kod va shaffoflik
 (Telega'ga qarshi javob) + o'zbek auditoriyasi uchun mahalliy funksiyalar.
@@ -143,69 +145,91 @@ toza dizayn (exteraGram) + nazorat (Nagram) + AI (iMe) + to'liq ochiq kod va sha
 
 ## 5. Texnik reja
 
-### 5.1. Asos tanlovi
+> 2026-11-11 da yangilandi. Egasining qarori: kod to'liq AI yordamida yoziladi, platforma —
+> **Next.js**, auditoriya — **O'zbekiston**. Avvalgi "rasmiy Android klientini fork qilish"
+> tavsiyasi bekor qilindi.
 
-| Variant | + | − |
+### 5.1. Asos
+
+| Qaror | Tanlov | Sabab |
 |---|---|---|
-| **A. Rasmiy Telegram Android forki** | Barcha funksiyalar darhol; boshqa GPL forklardan kod olish mumkin | Java monolit; har relizda merge; GPL — kod ochiq bo'ladi |
-| B. TDLib + yangi UI (Compose/KMP) | Toza arxitektura, ko'p platforma | UI ni noldan — Telegram X misolida ~1 yil; funksiyalar ortda qoladi |
-| C. Web A forki | Eng tez prototip, desktop+web | Mobil auditoriya yo'q; web'da imkoniyat cheklangan |
+| MTProto kutubxonasi | `@mtcute/web` (MIT) | TypeScript, brauzer uchun tayyor: WebSocket transport, IndexedDB sessiya, WASM kripto |
+| Next.js rejimi | App Router, `output: 'export'` (to'liq statik) | Sessiya va xabarlar bizning serverdan o'tmaydi (§2.6 sabog'i); `out/` ni istalgan qobiqqa o'rash mumkin |
+| Boshqa OS'larga chiqish | PWA → Tauri (Windows/macOS/Linux) → Capacitor (Android/iOS) | Bitta kod bazasi |
+| UI / holat | Tailwind CSS, Zustand | Yengil, AI bilan yozishga qulay |
+| Til | o'zbek (lotin) asosiy; rus/ingliz keyin | Auditoriya |
 
-**Tavsiya: A (Android), keyin desktop.** Maqsad — mavjud modlarning foydasini yig'ish; ular
-deyarli hammasi shu kod bazasi ustida, demak ko'chirish eng arzon. B faqat katta jamoa va uzoq
-muddat bo'lsa o'zini oqlaydi.
+Fork bo'lmagani uchun GPL majburiyati yo'q, lekin GPL forklardan **kod ko'chirib bo'lmaydi** —
+§4 dagi funksiyalar g'oya sifatida olinadi va noldan yoziladi.
 
-### 5.2. Fork gigiyenasi (Kotatogram taqdiridan qochish)
+### 5.2. Bu tanlovning narxi
 
-- Barcha o'z kodimiz alohida paketda (`uz.tgcrazy.*`); upstream fayllarga faqat bir qatorlik "hook" qo'yiladi.
-- Har bir funksiya `CrazyConfig` dagi toggle ortida; o'chirilganda rasmiy xatti-harakat.
-- `upstream` remote + har relizda rebase/merge; konfliktlar soni — asosiy sog'liq ko'rsatkichi.
-- CI: har push'da debug build, tag'da imzolangan reliz APK.
-- Hech qanday o'z serverimiz orqali trafik yo'q; tarmoq qatlami o'zgartirilmaydi.
+- Hamma funksiyani o'zimiz yozamiz: papkalar, media, stikerlar, reaksiyalar, qidiruv va h.k.
+  rasmiy klientdagi kabi "tayyor" kelmaydi. §4 dagi funksiyalardan oldin asosiy messenjer
+  imkoniyatlarini yetkazish kerak.
+- Veb-qobiq cheklovlari: ovozli/video qo'ng'iroqlar va maxfiy (E2E) chatlar murakkab; fon
+  bildirishnomalari uchun mobilda native plagin kerak bo'ladi.
+- `api_id`/`api_hash` klient kodida ochiq turadi — bu barcha Telegram klientlarida shunday,
+  lekin ularni o'g'irlab suiiste'mol qilishsa, javobgarlik bizning `api_id` ga tushadi.
 
-### 5.3. Yo'l xaritasi
+### 5.3. Qoidalar
 
-**Faza 0 — poydevor (1–2 hafta)**
-- [ ] `my.telegram.org` da o'z `api_id`/`api_hash` olish; API shartlarini to'liq o'qish
-- [ ] Rasmiy Android repozitoriyasini fork qilish, yig'ish, o'z paket nomi/nomi/ikonkasi (nomda "Telegram" yo'q)
-- [ ] CI (GitHub Actions), imzolash kaliti, `upstream` sinxronlash tartibi
-- [ ] `CrazyConfig` + bo'sh "Crazy sozlamalari" ekrani
-- [ ] Maxfiylik siyosati va monetizatsiya bayonoti qoralamasi
+- Hech qanday o'z serverimiz orqali Telegram trafigi yo'q. AI funksiyalari uchun server
+  kerak bo'lganda, nima yuborilishi foydalanuvchiga har safar ko'rsatiladi.
+- Har bir "kuchaytirish" sozlamalarda alohida o'chirib-yoqiladi.
+- §3 qizil chiziqlari kod darajasida ham saqlanadi (masalan, chat ochilganda o'qilgan deb
+  belgilash o'chirilmaydi).
+- CI har push'da: lint, tiplar, testlar, build.
 
-**Faza 1 — MVP: qulaylik (4–6 hafta)** — jadvaldagi 1–7
-- Chiqish mezoni: kundalik foydalanishga yaroqli, rasmiy klientdan ko'rinarli farq, 0 ta ToS buzilishi
-- Tarqatish: GitHub Releases + o'z Telegram kanali, ilova ichida yangilanish tekshiruvi
+### 5.4. Yo'l xaritasi
 
-**Faza 2 — kuch (6–10 hafta)** — jadvaldagi 8–14
-- AI: foydalanuvchi o'z API kalitini kiritadi yoki bizning pullik proksi; nima qayerga
-  yuborilishi har safar aniq ko'rsatiladi; maxfiy chatlar AI'ga hech qachon yuborilmaydi
+**Faza 0 — poydevor** ✅
+- [x] Next.js skeleti, statik eksport, CI
+- [x] Telegram qatlami (`src/lib/telegram/`): kirish (telefon → kod → 2FA), chatlar, tarix, matn yuborish, yangi xabarlar
+- [x] Asosiy interfeys: chatlar ro'yxati + xabarlar oynasi, mobil ko'rinish, och/to'q mavzu
+- [x] Lotin↔kirill o'girish (xabarda, yozish maydonida, qidiruvda)
+- [ ] **Egasi:** `my.telegram.org` da `api_id`/`api_hash` olish va haqiqiy akkaunt bilan sinash
+- [ ] **Egasi:** API shartlarini to'liq o'qish; ilova nomi va ikonkasini tanlash
 
-**Faza 3 — platforma (3+ oy)** — jadvaldagi 15–17
-- Plagin API, plaginlar katalogi; desktop (tdesktop forki) yoki iOS bo'yicha qaror
+**Faza 1 — to'laqonli messenjer**
+- Media: rasm/video/fayl ko'rish va yuborish, ovozli xabarlar, stikerlar
+- Javob berish, tahrirlash, o'chirish, forward, reaksiyalar
+- Tarixni yuqoriga varaqlash, o'qilganlik belgilari, "yozmoqda" holati
+- Papkalar, arxiv, global qidiruv, profil/guruh ma'lumoti
+- Rasmiy sponsorlik xabarlarini ko'rsatish (§3, 4-band)
+- Sozlamalar ekrani; PWA (o'rnatish, oflayn qobiq)
 
-**Faza 4 — o'sish**
-- Google Play (ToS'ga mos bo'lgani uchun ochiq yo'l), F-Droid
-- Monetizatsiya: AI obunasi / xayriya. Premium funksiyalarni sotish yoki ochish — yo'q
+**Faza 2 — kuchaytirishlar** (§4 jadvalidan)
+- Bezovtalikni o'chirish, xabar tafsilotlari, muallifsiz forward, tab/papka kustomizatsiyasi
+- Tarjimon; AI: o'qilmaganlar xulosasi, ovozli xabar matni, javob qoralamasi
+- Lokal filtrlar, chat qulfi, ko'p akkaunt
 
-### 5.4. Xavflar
+**Faza 3 — boshqa OS'lar**
+- Tauri (desktop), Capacitor (Android/iOS), native bildirishnomalar
+- Google Play / App Store talablari
+
+**Faza 4 — o'sish va monetizatsiya**
+- To'lov tizimlari (Click/Payme) bilan obuna; Premium funksiyalarni sotish yoki ochish — yo'q (§3)
+
+### 5.5. Xavflar
 
 | Xavf | Ehtimol | Yumshatish |
 |---|---|---|
-| `api_id` bloklanishi | Past (ToS'ga rioya qilsak) | §3 qizil chiziqlari; shikoyatga 10 kun ichida javob |
-| "Norasmiy klient" belgisi foydalanuvchilarni cho'chitishi | O'rta | To'liq ochiq kod, reproducible build, tarmoq qatlamiga tegmaslik |
-| Upstream merge yuki | Yuqori | §5.2; patch hajmini kichik tutish |
-| Ghost mode'siz AyuGram bilan raqobat | Yuqori | Boshqa o'q: dizayn + AI + mahalliy funksiyalar + xavfsizlik |
-| Telegram funksiyani o'zi qo'shib qo'yishi | O'rta | Tez yetkazish; plaginlar orqali uzun dum |
+| Hajm: to'liq klientni noldan yozish | Yuqori | Faza 1 ni qat'iy ustuvorlik bilan; har funksiya — alohida kichik PR |
+| `api_id` bloklanishi | Past (ToS'ga rioya qilsak) | §3 qizil chiziqlari |
+| "Norasmiy klient" belgisi foydalanuvchilarni cho'chitishi | O'rta | Ochiq kod, serversiz arxitektura |
+| `@mtcute` ga bog'liqlik (0.x versiya, kichik jamoa) | O'rta | Kutubxona faqat `src/lib/telegram/` ichida ishlatiladi — almashtirish mumkin |
+| AI yozgan kodning sifati | O'rta | Testlar, tiplar, CI; har o'zgarishni haqiqiy akkauntda sinash |
 
 ---
 
-## 6. Ochiq qarorlar (egasidan javob kerak)
+## 6. Ochiq qarorlar
 
-1. **Platforma** — Android'dan boshlash tavsiya etiladi. Rozimisiz, yoki iOS/desktop birinchi?
-2. **Auditoriya** — o'zbek bozori (mahalliy funksiyalar birinchi) yoki global?
-3. **Qizil chiziqlar** — ghost mode va shunga o'xshashlardan voz kechish tavsiya etiladi. Bu qaror mahsulot pozitsiyasini belgilaydi.
-4. **Monetizatsiya** — AI obunasi, xayriya, yoki hozircha yo'q?
-5. **Jamoa** — bir kishi bo'lsa Faza 1 hajmini yarmiga qisqartirish kerak.
+1. **Monetizatsiya** — "loyihadan foydalanish" deganda pullik obuna nazarda tutilganmi, yoki
+   boshqa narsa? Faza 4 gacha ta'sir qilmaydi, lekin Faza 2 da AI narxini kim to'lashini belgilaydi.
+2. **Qizil chiziqlar** — ghost mode va shunga o'xshashlardan voz kechish tavsiya etilgan va
+   kodda shunday qilingan. E'tiroz bo'lsa, hozir aytish kerak.
+3. **Kod ochiqligi** — ochiq repozitoriy ishonchni oshiradi (§2.6); yopiq qoldirish ham mumkin.
 
 ---
 
@@ -221,3 +245,4 @@ muddat bo'lsa o'zini oqlaydi.
 - [Sponsorlik xabarlari talabi (rozetked, 2021)](https://rozetked.me/news/20631-telegram-otklyuchit-storonnie-klienty-kotorye-ne-podderzhivayut-oficial-nye-reklamnye-soobscheniya)
 - [iMe — Google Play sahifasi](https://play.google.com/store/apps/details?id=com.iMe.android)
 - [Telegram API: Bot API vs MTProto vs TDLib](https://macmyths.com/telegram-api-libraries-bot-api-tdlib-and-mtproto-compared/)
+- [mtcute — TypeScript MTProto kutubxonasi](https://github.com/mtcute/mtcute)

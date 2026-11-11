@@ -1,5 +1,43 @@
 # Tg-crazy
 
-Kuchaytirilgan, ochiq kodli norasmiy Telegram klienti (rejalashtirish bosqichida).
+O'zbekiston uchun kuchaytirilgan norasmiy Telegram klienti. Next.js'da yozilgan, to'liq
+brauzerda ishlaydi: sessiya faqat qurilmada saqlanadi va to'g'ridan-to'g'ri Telegram
+serverlariga ulanadi.
 
-- [Tahlil va reja](docs/PLAN.md) — mashhur Telegram klientlari tahlili, olinadigan funksiyalar, yo'l xaritasi.
+- [Tahlil va reja](docs/PLAN.md) — mashhur Telegram klientlari tahlili, API shartlari, yo'l xaritasi.
+
+## Hozir nima bor
+
+Kirish va xabar almashish hali haqiqiy akkauntda sinalmagan — buning uchun `api_id` kerak
+(pastga qarang). Interfeys va lotin↔kirill o'girish tekshirilgan.
+
+- Kirish: telefon → kod → ikki bosqichli parol
+- Chatlar ro'yxati (qidiruv lotin/kirillga bog'liq emas), xabarlar tarixi, matn yuborish, yangi xabarlar
+- Lotin ↔ kirill o'girish: har bir xabarda va yozish maydonida (`Aa↔Аа` tugmasi)
+- Mobil ko'rinish, och/to'q mavzu (tizim sozlamasiga qarab)
+
+## Ishga tushirish
+
+1. <https://my.telegram.org> → *API development tools* da ilova yarating, `api_id` va `api_hash` oling.
+2. Sozlang va ishga tushiring:
+
+   ```bash
+   cp .env.example .env.local   # ikkala qiymatni to'ldiring
+   npm install
+   npm run dev                  # http://localhost:3000
+   ```
+
+## Buyruqlar
+
+| Buyruq | Vazifasi |
+|---|---|
+| `npm run dev` | Ishlab chiqish serveri |
+| `npm run build` | Statik build → `out/` |
+| `npm run lint` / `npm run typecheck` / `npm test` | Tekshiruvlar |
+
+## Tuzilma
+
+- `src/lib/telegram/` — Telegram bilan ishlash (`@mtcute/web`); kutubxona faqat shu yerda ishlatiladi
+- `src/lib/translit/` — lotin ↔ kirill
+- `src/store/` — ilova holati (Zustand)
+- `src/components/` — interfeys
