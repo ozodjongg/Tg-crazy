@@ -63,10 +63,8 @@ func run(log *slog.Logger) error {
 		BotUsername: func() string { return "" },
 		AITimeout:   2 * time.Minute,
 	}
-	if cfg.AnthropicAPIKey != "" {
-		srv.AI = ai.NewService(ai.NewClaude(cfg.AnthropicAPIKey, cfg.AIModel), cfg.AIMaxInputChars)
-	} else {
-		log.Warn("ANTHROPIC_API_KEY yo'q — AI yo'llari o'chirilgan")
+	if err := setupAI(ctx, cfg, srv, log); err != nil {
+		return err
 	}
 	if cfg.BotToken != "" {
 		bot := tgbot.New(cfg.BotToken, cfg.BotAPIURL, srv, log)
@@ -102,6 +100,40 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	return nil
+}
+
+// setupAI .env dagi AI_PROVIDER va kalitlar bo'yicha provayder(lar)ni yig'adi.
+func setupAI(ctx context.Context, cfg config.Config, srv *httpapi.Server, log *slog.Logger) error {
+	names := cfg.AIProviders()
+	if len(names) == 0 {
+		log.Warn("AI kaliti yo'q (ANTHROPIC_API_KEY yoki GEMINI_API_KEY) — AI yo'llari o'chirilgan")
+		return nil
+	}
+	chain := &ai.Fallback{Log: log}
+	for _, name := range names {
+		switch name {
+		case "anthropic":
+			chain.Providers = append(chain.Providers, ai.Named{Name: name, Provider: ai.NewClaude(cfg.AnthropicAPIKey, cfg.AnthropicModel)})
+			log.Info("AI provayder", "name", name, "model", cfg.AnthropicModel, "role", role(len(chain.Providers)))
+		case "gemini":
+			g, err := ai.NewGemini(ctx, cfg.GeminiAPIKey, cfg.GeminiModel, cfg.GeminiBaseURL)
+			if err != nil {
+				return err
+			}
+			chain.Providers = append(chain.Providers, ai.Named{Name: name, Provider: g})
+			log.Info("AI provayder", "name", name, "model", cfg.GeminiModel, "role", role(len(chain.Providers)))
+		}
+	}
+	srv.AI = ai.NewService(chain, cfg.AIMaxInputChars)
+	srv.AIProvider = chain.Describe()
+	return nil
+}
+
+func role(n int) string {
+	if n == 1 {
+		return "asosiy"
+	}
+	return "zaxira"
 }
 
 func grant(ctx context.Context, st *store.Store, args []string) error {

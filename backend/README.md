@@ -10,7 +10,7 @@ o'zi yuborgan matn (u saqlanmaydi va logga yozilmaydi — faqat hisoblagich yuri
 
 ```bash
 docker compose up -d          # Postgres
-cp .env.example .env          # JWT_SECRET ni to'ldiring; BOT_TOKEN va ANTHROPIC_API_KEY ixtiyoriy
+cp .env.example .env          # JWT_SECRET ni to'ldiring; BOT_TOKEN va AI kalitlari ixtiyoriy
 make run                      # migratsiyalar avtomatik bajariladi
 ```
 
@@ -49,11 +49,44 @@ Tariflar `plans` jadvalida: bepul — kuniga 10 ta AI so'rov, Pro — 200 ta. Pr
 
 ## AI
 
-Standart model — `claude-opus-5-5` (`AI_MODEL` bilan o'zgartiriladi). Model so'rovni xavfsizlik
-sababli rad etsa, API uni avtomatik zaxira modelda qayta bajaradi (server-side fallback).
+AI ikki provayderda ishlaydi — **Anthropic (Claude)** va **Google Gemini**. Qaysi biri
+ishlatilishi `.env` dan sozlanadi:
+
+| O'zgaruvchi | Vazifasi | Standart |
+|---|---|---|
+| `AI_PROVIDER` | `auto`, `anthropic` yoki `gemini` | `auto` |
+| `AI_FALLBACK` | Asosiy provayder ishlamasa ikkinchisiga o'tish (ikkala kalit bo'lsa) | `true` |
+| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | Anthropic kaliti va modeli | — / `claude-opus-5-5` |
+| `GEMINI_API_KEY` / `GEMINI_MODEL` | Gemini kaliti va modeli | — / `gemini-3.6-flash` |
+
+Misollar:
+
+```env
+# Faqat Gemini
+GEMINI_API_KEY=...
+
+# Faqat Anthropic
+ANTHROPIC_API_KEY=...
+
+# Ikkalasi: Gemini asosiy, Anthropic zaxira
+AI_PROVIDER=gemini
+GEMINI_API_KEY=...
+ANTHROPIC_API_KEY=...
+```
+
+- `AI_PROVIDER=gemini` (yoki `anthropic`) tanlansa-yu, uning kaliti bo'lmasa, server ishga
+  tushmaydi va aniq xato chiqaradi. Noma'lum qiymat ham xato.
+- Zaxiraga o'tish: tarmoq xatosi, limit (429), server xatosi (5xx) va noto'g'ri kalit/model
+  (401/403/404) holatlarida. Model so'rovni xavfsizlik sababli rad etsa yoki so'rovning o'zi
+  noto'g'ri bo'lsa (400) — o'tilmaydi.
+- Qaysi provayder asosiy va qaysi zaxira ekanligi ishga tushishda logga yoziladi va
+  `GET /healthz` ning `ai_provider` maydonida ko'rinadi (masalan `"gemini+anthropic"`).
+- Anthropic'da model so'rovni xavfsizlik sababli rad etsa, API uni avtomatik o'z zaxira
+  modelida qayta bajaradi (server-side fallback).
+- Eski `AI_MODEL` o'zgaruvchisi hamon `ANTHROPIC_MODEL` o'rnida ishlaydi.
 
 ## Tuzilma
 
 `cmd/api` — kirish nuqtasi · `internal/httpapi` — router va handlerlar · `internal/store` —
 Postgres va migratsiyalar · `internal/auth` — JWT · `internal/tgbot` — bot · `internal/ai` —
-promptlar va provayder · `internal/billing` — to'lov interfeysi.
+promptlar va provayderlar (Claude, Gemini, zaxira zanjiri) · `internal/billing` — to'lov interfeysi.

@@ -32,6 +32,8 @@ type Server struct {
 	// BotUsername bo'sh bo'lsa bot sozlanmagan — ulanish yo'llari 503 qaytaradi.
 	BotUsername func() string
 	AITimeout   time.Duration
+	// AIProvider — faqat ma'lumot uchun, masalan "anthropic+gemini"
+	AIProvider string
 }
 
 func (s *Server) Handler() http.Handler {
@@ -163,8 +165,9 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ok",
-		"auth":   s.BotUsername() != "",
-		"ai":     s.AI != nil,
+		"status":      "ok",
+		"auth":        s.BotUsername() != "",
+		"ai":          s.AI != nil,
+		"ai_provider": s.AIProvider,
 	})
 }
