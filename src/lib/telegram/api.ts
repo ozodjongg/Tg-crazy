@@ -1,4 +1,5 @@
 import type { Message, TelegramClient } from "@mtcute/web";
+import { parseMarkdown, toTlEntities } from "../markdown";
 import { getClient } from "./client";
 import { isRpcError } from "./errors";
 import { rememberMedia, rememberPeer } from "./media";
@@ -265,14 +266,84 @@ export async function saveDraft(chatId: number, text: string): Promise<void> {
   await client.saveDraft(chatId, text.trim() ? { message: text } : null);
 }
 
+/** Belgilashli matn (**qalin** va h.k.) Telegram formatiga o'giriladi. */
+function formatted(source: string) {
+  const { text, entities } = parseMarkdown(source);
+  return { text, entities: toTlEntities(entities) };
+}
+
 export async function sendText(chatId: number, text: string, replyTo?: number): Promise<MessageItem> {
   const client = await getClient();
-  return item(await client.sendText(chatId, text, { replyTo }));
+  return item(await client.sendText(chatId, formatted(text), { replyTo }));
 }
 
 export async function editText(chatId: number, messageId: number, text: string): Promise<MessageItem> {
   const client = await getClient();
-  return item(await client.editMessage({ chatId, message: messageId, text }));
+  return item(await client.editMessage({ chatId, message: messageId, text: formatted(text) }));
+}
+
+// ---- Stikerlar ----
+
+type StickerSetObj = Awaited<ReturnType<TelegramClient["getInstalledStickers"]>>[number];
+type StickerObj = StickerSetObj["stickers"][number]["sticker"];
+
+const stickerSets: StickerSetObj[] = [];
+const stickers = new Map<string, StickerObj>();
+const stickerThumbs = new Map<string, Promise<string>>();
+
+export interface StickerSetInfo {
+  index: number;
+  title: string;
+}
+
+export interface StickerRef {
+  key: string;
+  emoji: string;
+}
+
+export async function loadStickerSets(): Promise<StickerSetInfo[]> {
+  const client = await getClient();
+  const sets = await client.getInstalledStickers();
+  stickerSets.splice(0, stickerSets.length, ...sets);
+  return sets.map((s, index) => ({ index, title: s.title }));
+}
+
+export async function loadStickerSet(index: number): Promise<StickerRef[]> {
+  const client = await getClient();
+  const brief = stickerSets[index];
+  if (!brief) return [];
+  const full = await client.getStickerSet(brief.inputStickerSet);
+  return full.stickers.map((s, i) => {
+    const key = `${index}:${i}`;
+    stickers.set(key, s.sticker);
+    return { key, emoji: s.alt };
+  });
+}
+
+/** Stikerning kichik rasmi (animatsiyalilari uchun — statik eskiz). */
+export function stickerThumb(key: string): Promise<string> {
+  let p = stickerThumbs.get(key);
+  if (!p) {
+    p = (async () => {
+      const s = stickers.get(key);
+      if (!s) throw new Error("Stiker topilmadi");
+      const client = await getClient();
+      const thumb = [...s.thumbnails].filter((t) => t.width > 0).sort((a, b) => b.width - a.width)[0];
+      const isStatic = s.sourceType === "static";
+      const bytes = await client.downloadAsBuffer(isStatic || !thumb ? s : thumb);
+      return URL.createObjectURL(new Blob([bytes as BlobPart], { type: isStatic ? "image/webp" : "image/jpeg" }));
+    })();
+    stickerThumbs.set(key, p);
+    p.catch(() => stickerThumbs.delete(key));
+  }
+  return p;
+}
+
+export async function sendSticker(chatId: number, key: string, replyTo?: number): Promise<MessageItem> {
+  const s = stickers.get(key);
+  if (!s) throw new Error("Stiker topilmadi");
+  const client = await getClient();
+  return item(await client.sendMedia(chatId, s.inputMedia, { replyTo }));
 }
 
 /** revoke=true — hamma uchun o'chiradi. */

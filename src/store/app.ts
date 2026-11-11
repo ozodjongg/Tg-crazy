@@ -4,6 +4,7 @@ import { hasCredentials } from "@/lib/telegram/client";
 import { errorText } from "@/lib/telegram/errors";
 import { forgetChatMedia } from "@/lib/telegram/media";
 import { itemPreview, type ChatItem, type ChatKind, type Me, type MessageItem } from "@/lib/telegram/types";
+import { toMarkdown } from "@/lib/markdown";
 import { prependOlder, removeMessages, replaceMessage, toggleReaction, upsertMessage } from "@/lib/messages";
 
 export type Theme = "system" | "light" | "dark";
@@ -88,6 +89,7 @@ interface AppState {
   setDraft: (text: string) => void;
   send: (text: string) => Promise<void>;
   sendFile: (file: File, caption: string) => Promise<void>;
+  sendSticker: (key: string) => Promise<void>;
   deleteMessage: (msg: MessageItem, revoke: boolean) => Promise<void>;
   forwardMessage: (msg: MessageItem, toChatId: number) => Promise<void>;
   react: (msg: MessageItem, emoji: string) => Promise<void>;
@@ -428,7 +430,8 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     setReplyTo: (msg) => set({ replyTo: msg, editing: null }),
-    setEditing: (msg) => set({ editing: msg, replyTo: null, draft: msg?.text ?? "" }),
+    // Tahrirlashda formatlash belgilarga qaytariladi, saqlashda yana o'giriladi
+    setEditing: (msg) => set({ editing: msg, replyTo: null, draft: msg ? toMarkdown(msg.text, msg.entities) : "" }),
     setDraft: (draft) => set({ draft }),
 
     async send(text) {
@@ -437,7 +440,7 @@ export const useApp = create<AppState>((set, get) => {
       if (chatId === null || !body) return;
       try {
         if (editing) {
-          if (body !== editing.text) {
+          if (body !== toMarkdown(editing.text, editing.entities)) {
             const msg = await tg.editText(chatId, editing.id, body);
             if (get().activeChatId === chatId) set({ messages: replaceMessage(get().messages, msg) });
           }
@@ -473,6 +476,18 @@ export const useApp = create<AppState>((set, get) => {
         fail(err);
       } finally {
         set({ upload: null });
+      }
+    },
+
+    async sendSticker(key) {
+      const { activeChatId: chatId, replyTo } = get();
+      if (chatId === null) return;
+      try {
+        const msg = await tg.sendSticker(chatId, key, replyTo?.id);
+        set({ replyTo: null });
+        handleIncoming(msg);
+      } catch (err) {
+        set({ error: errorText(err) });
       }
     },
 

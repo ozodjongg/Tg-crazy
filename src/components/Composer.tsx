@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { insertAt } from "@/lib/emoji";
+import { wrapSelection } from "@/lib/markdown";
 import { pickForAi } from "@/lib/messages";
 import { itemPreview } from "@/lib/telegram/types";
 import { toggleScript } from "@/lib/translit/uz";
 import { useApp } from "@/store/app";
 import { useServices } from "@/store/services";
+import { AttachDialog } from "./AttachDialog";
+import { EmojiPanel } from "./EmojiPanel";
 import { Icon } from "./Icon";
 
 const iconButton =
@@ -26,6 +30,9 @@ export function Composer() {
   const openAi = useServices((s) => s.openAi);
 
   const [sending, setSending] = useState(false);
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const [attach, setAttach] = useState<File | null>(null);
+  const sendSticker = useApp((s) => s.sendSticker);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -54,7 +61,33 @@ export function Composer() {
     }
   }
 
+  /** Kursor joyiga qo'yadi va kursorni qo'yilgan matndan keyinga suradi. */
+  function insert(value: string) {
+    const el = ref.current;
+    const start = el?.selectionStart ?? text.length;
+    const end = el?.selectionEnd ?? text.length;
+    const next = insertAt(text, start, end, value);
+    setDraft(next.text);
+    requestAnimationFrame(() => {
+      el?.focus();
+      el?.setSelectionRange(next.cursor, next.cursor);
+    });
+  }
+
+  function wrap(marker: string) {
+    const el = ref.current;
+    if (!el || el.selectionStart === el.selectionEnd) return false;
+    const next = wrapSelection(text, el.selectionStart, el.selectionEnd, marker);
+    setDraft(next.text);
+    requestAnimationFrame(() => el.setSelectionRange(next.start, next.end));
+    return true;
+  }
+
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "b" || e.key === "i")) {
+      if (wrap(e.key === "b" ? "**" : "__")) e.preventDefault();
+      return;
+    }
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       void submit();
@@ -65,12 +98,10 @@ export function Composer() {
     }
   }
 
-  async function onFiles(files: FileList | null) {
+  function onFiles(files: FileList | null) {
     const file = files?.[0];
     if (fileRef.current) fileRef.current.value = "";
-    if (!file) return;
-    // Yozilgan matn fayl izohi sifatida ketadi
-    await sendFile(file, text).catch(() => {});
+    if (file) setAttach(file);
   }
 
   const empty = !text.trim();
@@ -106,7 +137,26 @@ export function Composer() {
         )}
         <div className="flex items-end gap-2">
           <div className="flex min-w-0 flex-1 items-end rounded-3xl border border-border bg-bg py-1 pl-1 pr-1 shadow-sm focus-within:border-accent">
-            <input ref={fileRef} type="file" className="hidden" onChange={(e) => void onFiles(e.target.files)} />
+            <input ref={fileRef} type="file" className="hidden" onChange={(e) => onFiles(e.target.files)} />
+            <div className="relative">
+              <button
+                className={iconButton}
+                title="Emoji va stikerlar"
+                aria-label="Emoji va stikerlar"
+                aria-expanded={emojiOpen}
+                disabled={busy}
+                onClick={() => setEmojiOpen((v) => !v)}
+              >
+                <span className="text-lg leading-none" aria-hidden>🙂</span>
+              </button>
+              {emojiOpen && (
+                <EmojiPanel
+                  onEmoji={insert}
+                  onSticker={(key) => void sendSticker(key)}
+                  onClose={() => setEmojiOpen(false)}
+                />
+              )}
+            </div>
             <button
               className={iconButton}
               title="Fayl yoki rasm biriktirish"
@@ -120,7 +170,7 @@ export function Composer() {
               ref={ref}
               className="max-h-40 min-w-0 flex-1 resize-none bg-transparent px-1 py-2 placeholder:text-muted"
               rows={1}
-              placeholder={editing ? "Xabarni tahrirlang…" : "Xabar yozing…"}
+              placeholder={editing ? "Xabarni tahrirlang…" : "Xabar yozing…  (**qalin**, __kursiv__, `kod`)"}
               aria-label="Xabar matni"
               value={text}
               onChange={(e) => {
@@ -128,6 +178,13 @@ export function Composer() {
                 if (e.target.value && !editing) notifyTyping();
               }}
               onKeyDown={onKeyDown}
+              onPaste={(e) => {
+                const file = [...e.clipboardData.files][0];
+                if (file && !editing) {
+                  e.preventDefault();
+                  setAttach(file);
+                }
+              }}
             />
             {aiReady && !editing && (
               <button
@@ -160,6 +217,20 @@ export function Composer() {
           </button>
         </div>
       </div>
+      {attach && (
+        <AttachDialog
+          file={attach}
+          initialCaption={text}
+          onClose={() => setAttach(null)}
+          onSend={(caption) => {
+            const file = attach;
+            setAttach(null);
+            // Matn izohga o'tdi — yozish maydoni tozalanadi
+            setDraft("");
+            void sendFile(file, caption).catch(() => setDraft(caption));
+          }}
+        />
+      )}
     </footer>
   );
 }
