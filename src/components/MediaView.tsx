@@ -5,6 +5,7 @@ import { formatDuration, formatSize } from "@/lib/messages";
 import { mediaUrl, stickerAnimation } from "@/lib/telegram/media";
 import type { MessageItem } from "@/lib/telegram/types";
 import { Icon } from "./Icon";
+import { IosSticker, stickerTilt } from "./IosSticker";
 
 /** Blob-URL ni yuklaydi. enabled=false bo'lsa kutadi (talab bo'yicha yuklash). */
 function useMediaUrl(msg: MessageItem, variant: "preview" | "full", enabled: boolean) {
@@ -168,7 +169,7 @@ function LoopVideo({ msg }: { msg: MessageItem }) {
   );
 }
 
-function AnimatedSticker({ msg, size }: { msg: MessageItem; size: number }) {
+function AnimatedSticker({ msg }: { msg: MessageItem }) {
   const ref = useRef<HTMLDivElement>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -190,27 +191,30 @@ function AnimatedSticker({ msg, size }: { msg: MessageItem; size: number }) {
       anim?.destroy();
     };
   }, [msg.chatId, msg.id]);
-  if (failed) return <span className="text-6xl">{msg.media?.fileName}</span>;
-  return <div ref={ref} style={{ width: size, height: size }} aria-label={`Stiker ${msg.media?.fileName ?? ""}`} />;
+  if (failed) return <span className="text-8xl leading-none">{msg.media?.fileName}</span>;
+  return <div ref={ref} className="h-full w-full" aria-label={`Stiker ${msg.media?.fileName ?? ""}`} />;
 }
 
+/** Stiker iPhone uslubida: oq kesma chegara, soya, yaltirash, egilish. */
 function Sticker({ msg }: { msg: MessageItem }) {
   const media = msg.media!;
-  const size = 180;
+  const size = 184;
   const { ref, visible } = useVisible<HTMLDivElement>();
-  const isStatic = media.stickerFormat === "static";
-  const full = useMediaUrl(msg, "full", visible && media.stickerFormat !== "animated");
+  const format = media.stickerFormat;
+  const full = useMediaUrl(msg, "full", visible && format !== "animated");
   return (
-    <div ref={ref} style={{ width: size, height: size }} className="flex items-center justify-center">
-      {visible && media.stickerFormat === "animated" && <AnimatedSticker msg={msg} size={size} />}
-      {full.url && isStatic && (
-        // eslint-disable-next-line @next/next/no-img-element -- blob URL
-        <img src={full.url} alt={`Stiker ${media.fileName}`} className="max-h-full max-w-full object-contain" />
-      )}
-      {full.url && media.stickerFormat === "video" && (
-        <video src={full.url} autoPlay loop muted playsInline className="max-h-full max-w-full" aria-label={`Stiker ${media.fileName}`} />
-      )}
-      {full.error && <span className="text-6xl">{media.fileName}</span>}
+    <div ref={ref} style={{ width: size, height: size }}>
+      <IosSticker size={size} tilt={stickerTilt(msg.id)} slapSince={msg.date}>
+        {visible && format === "animated" && <AnimatedSticker msg={msg} />}
+        {full.url && format === "static" && (
+          // eslint-disable-next-line @next/next/no-img-element -- blob URL
+          <img src={full.url} alt={`Stiker ${media.fileName}`} draggable={false} className="h-full w-full select-none object-contain" />
+        )}
+        {full.url && format === "video" && (
+          <video src={full.url} autoPlay loop muted playsInline className="h-full w-full object-contain" aria-label={`Stiker ${media.fileName}`} />
+        )}
+        {full.error && <span className="text-8xl leading-none">{media.fileName}</span>}
+      </IosSticker>
     </div>
   );
 }

@@ -20,6 +20,7 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | GIF va dumaloq video (avtomatik, ovozsiz takrorlanadi) | ✅ |
 | Ovozli xabar to'lqin shakli bilan | ✅ |
 | Stikerlar: oddiy (webp), video (webm), animatsiyali (tgs/Lottie) | ✅ |
+| Stikerlar iPhone uslubida: oq kesma chegara, soya, "puffy" yaltirash, kursor bo'yicha egilish, bosilganda ko'tarilish, yangi stiker "yopishib" tushadi (chatda va tanlash panelida) | ✅ |
 | So'rovnoma va viktorina: variantlar, natijalar, ovoz berish | ✅ |
 | Joylashuv, manzil, kontakt kartochkalari | ✅ |
 | Bot tugmalari (inline): bosish, havola ochish, javobni ko'rsatish | ✅ |

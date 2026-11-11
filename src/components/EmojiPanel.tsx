@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { EMOJI_GROUPS, recentEmoji, rememberEmoji } from "@/lib/emoji";
 import * as tg from "@/lib/telegram/api";
 import { Icon } from "./Icon";
+import { IosSticker } from "./IosSticker";
 
 function StickerCell({ sticker, onPick }: { sticker: tg.StickerRef; onPick: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
@@ -15,9 +16,16 @@ function StickerCell({ sticker, onPick }: { sticker: tg.StickerRef; onPick: () =
     };
   }, [sticker.key]);
   return (
-    <button className="flex aspect-square items-center justify-center rounded-xl p-1 hover:bg-hover" aria-label={`Stiker ${sticker.emoji}`} onClick={onPick}>
-      {/* eslint-disable-next-line @next/next/no-img-element -- blob URL */}
-      {url ? <img src={url} alt="" className="max-h-full max-w-full object-contain" /> : <span className="text-2xl">{sticker.emoji}</span>}
+    <button
+      className="ios-sticker-cell flex aspect-square items-center justify-center rounded-2xl"
+      aria-label={`Stiker ${sticker.emoji}`}
+      title={sticker.emoji}
+      onClick={onPick}
+    >
+      <IosSticker size={58}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- blob URL */}
+        {url ? <img src={url} alt="" draggable={false} className="h-full w-full select-none object-contain" /> : <span className="text-3xl leading-none">{sticker.emoji}</span>}
+      </IosSticker>
     </button>
   );
 }
@@ -63,7 +71,7 @@ function Stickers({ onSticker }: { onSticker: (key: string) => void }) {
           </button>
         ))}
       </div>
-      <div className="thin-scroll grid flex-1 grid-cols-5 content-start gap-1 overflow-y-auto p-2">
+      <div className="thin-scroll grid flex-1 grid-cols-5 content-start gap-1.5 overflow-y-auto p-2">
         {!items && <p className="col-span-5 p-4 text-center text-sm text-muted">Yuklanmoqda…</p>}
         {items?.map((s) => <StickerCell key={s.key} sticker={s} onPick={() => onSticker(s.key)} />)}
       </div>

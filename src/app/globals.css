@@ -166,3 +166,76 @@ body {
 .wallpaper-preview[data-preview="paper"] {
   background-image: repeating-linear-gradient(0deg, var(--chat-dot) 0 1px, transparent 1px 12px);
 }
+
+/* ---- iPhone uslubidagi stikerlar (IosSticker) ---- */
+.ios-sticker {
+  position: relative;
+  perspective: 600px;
+  transform: rotate(var(--ios-tilt, 0deg));
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.ios-sticker__art {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  transform: rotateX(var(--ios-rx, 0deg)) rotateY(var(--ios-ry, 0deg)) scale(var(--ios-lift, 1));
+  transition: transform 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+.ios-sticker__art > * {
+  max-width: 100%;
+  max-height: 100%;
+}
+.ios-sticker:hover {
+  --ios-lift: 1.04;
+}
+/* Bosib turilganda iOS'dagidek stiker "ko'chib" ko'tariladi */
+.ios-sticker:active {
+  --ios-lift: 1.1;
+}
+.ios-sticker:active .ios-sticker__art {
+  transition-duration: 0.12s;
+}
+/* Yangi stiker: tepadan tushib, chatga "yopishadi" */
+.ios-sticker--slap {
+  animation: ios-sticker-slap 0.55s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+}
+@keyframes ios-sticker-slap {
+  0% {
+    opacity: 0;
+    transform: translateY(-18px) scale(1.35) rotate(calc(var(--ios-tilt, 0deg) - 12deg));
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(0) scale(0.93) rotate(var(--ios-tilt, 0deg));
+  }
+  78% {
+    transform: scale(1.04) rotate(var(--ios-tilt, 0deg));
+  }
+  100% {
+    transform: scale(1) rotate(var(--ios-tilt, 0deg));
+  }
+}
+/* Tanlash panelidagi katak: iOS stiker tortmasidagidek */
+.ios-sticker-cell {
+  background: color-mix(in srgb, var(--hover) 55%, transparent);
+  transition: background-color 0.15s, transform 0.15s;
+}
+.ios-sticker-cell:hover {
+  background: var(--hover);
+}
+.ios-sticker-cell:active {
+  transform: scale(0.94);
+}
+@media (prefers-reduced-motion: reduce) {
+  .ios-sticker--slap {
+    animation: none;
+  }
+  .ios-sticker__art {
+    transition: none;
+    transform: none;
+  }
+}
