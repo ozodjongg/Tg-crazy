@@ -11,6 +11,7 @@ import { useServices } from "@/store/services";
 import { AttachDialog } from "./AttachDialog";
 import { EmojiPanel } from "./EmojiPanel";
 import { Icon } from "./Icon";
+import { PopupMenu } from "./PopupMenu";
 
 const iconButton =
   "mb-0.5 flex h-9 shrink-0 items-center justify-center rounded-full px-2.5 text-muted hover:bg-hover hover:text-text disabled:opacity-40 disabled:hover:bg-transparent";
@@ -33,6 +34,7 @@ export function Composer() {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [attach, setAttach] = useState<File | null>(null);
   const sendSticker = useApp((s) => s.sendSticker);
+  const [sendMenu, setSendMenu] = useState<{ x: number; y: number } | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -48,11 +50,11 @@ export function Composer() {
     if (replyTo || editing) ref.current?.focus();
   }, [replyTo, editing]);
 
-  async function submit() {
+  async function submit(silent = false) {
     if (!text.trim() || sending) return;
     setSending(true);
     try {
-      await send(text);
+      await send(text, silent);
     } catch {
       // Xato store orqali ko'rsatiladi; matn saqlanib qoladi
     } finally {
@@ -207,9 +209,14 @@ export function Composer() {
             </button>
           </div>
           <button
+            onContextMenu={(e) => {
+              if (editing || !text.trim()) return;
+              e.preventDefault();
+              setSendMenu({ x: e.clientX, y: e.clientY });
+            }}
             className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-text hover:bg-accent-hover disabled:opacity-40 disabled:hover:bg-accent"
             aria-label={editing ? "Saqlash" : "Yuborish"}
-            title={editing ? "Saqlash (Enter)" : "Yuborish (Enter)"}
+            title={editing ? "Saqlash (Enter)" : "Yuborish (Enter) · o'ng tugma — ovozsiz"}
             disabled={empty || busy}
             onClick={() => void submit()}
           >
@@ -217,6 +224,15 @@ export function Composer() {
           </button>
         </div>
       </div>
+      {sendMenu && (
+        <PopupMenu
+          x={sendMenu.x - 220}
+          y={sendMenu.y - 60}
+          label="Yuborish usuli"
+          actions={[{ key: "silent", label: "Ovozsiz yuborish", icon: "mute", run: () => void submit(true) }]}
+          onClose={() => setSendMenu(null)}
+        />
+      )}
       {attach && (
         <AttachDialog
           file={attach}

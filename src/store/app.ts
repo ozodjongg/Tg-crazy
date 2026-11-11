@@ -90,7 +90,8 @@ interface AppState {
   setReplyTo: (msg: MessageItem | null) => void;
   setEditing: (msg: MessageItem | null) => void;
   setDraft: (text: string) => void;
-  send: (text: string) => Promise<void>;
+  /** silent — qabul qiluvchida ovozsiz bildirishnoma */
+  send: (text: string, silent?: boolean) => Promise<void>;
   sendFile: (file: File, caption: string) => Promise<void>;
   sendSticker: (key: string) => Promise<void>;
   deleteMessage: (msg: MessageItem, revoke: boolean) => Promise<void>;
@@ -456,7 +457,7 @@ export const useApp = create<AppState>((set, get) => {
     setEditing: (msg) => set({ editing: msg, replyTo: null, draft: msg ? toMarkdown(msg.text, msg.entities) : "" }),
     setDraft: (draft) => set({ draft }),
 
-    async send(text) {
+    async send(text, silent = false) {
       const { activeChatId: chatId, editing, replyTo } = get();
       const body = text.trim();
       if (chatId === null || !body) return;
@@ -469,7 +470,7 @@ export const useApp = create<AppState>((set, get) => {
           set({ editing: null, draft: "" });
           return;
         }
-        const msg = await tg.sendText(chatId, body, replyTo?.id);
+        const msg = await tg.sendText(chatId, body, replyTo?.id, silent);
         set({ replyTo: null, draft: "" });
         // O'z xabarimiz update orqali ham kelishi mumkin — upsert takrorni birlashtiradi
         handleIncoming(msg);

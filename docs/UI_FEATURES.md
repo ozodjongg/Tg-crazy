@@ -63,7 +63,8 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Rasmni joylashtirish (Ctrl+V) | ✅ |
 | Qoralamalarni saqlash (chat almashtirganda yo'qolmaydi, Telegram bilan sinxron) | ✅ |
 | Stiker paneli (o'rnatilgan to'plamlar) | ✅ |
-| Ovozsiz yuborish, vaqtga rejalashtirish | ⬜ |
+| Ovozsiz yuborish | ✅ |
+| Vaqtga rejalashtirish va rejalashtirilgan xabarlar ro'yxati | ⬜ |
 | Ovozli xabar yozish (mikrofon) | ⬜ |
 | @mention va bot buyruqlari avtoto'ldirish | ⬜ |
 | GIF qidiruv | ⬜ |

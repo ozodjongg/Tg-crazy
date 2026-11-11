@@ -13,12 +13,15 @@ serverlariga ulanadi.
 Telegram bilan haqiqiy almashinuv hali sinalmagan — buning uchun `api_id` kerak (pastga qarang).
 Interfeys namunaviy ma'lumot bilan, backend esa testlar va lokal server bilan tekshirilgan.
 
-**Messenjer**
+**Messenjer** — to'liq ro'yxat va holat: [docs/UI_FEATURES.md](docs/UI_FEATURES.md)
 - Kirish: telefon → kod → ikki bosqichli parol
-- Chatlar: Telegram'dagi papkalaringiz (bo'lmasa — Shaxsiy / Guruhlar / Kanallar), qidiruv lotin/kirillga bog'liq emas
-- Xabarlar: yuborish, javob berish, tahrirlash, o'chirish, uzatish, reaksiyalar; tarixni yuqoriga varaqlash
-- Media: rasmlarni ko'rish, fayl/video/ovozli xabarni yuklab olish va ijro etish; fayl yuborish (📎 yoki sudrab tashlash)
-- Jonli: yangi xabarlar, tahrir va o'chirishlar, o'qilganlik (✓✓), "yozmoqda…", onlayn holati
+- Chatlar: Telegram papkalari, arxiv, "Saqlangan xabarlar", qadash, ovozsiz qilish, o'qilgan/o'qilmagan, o'chirish; qoralama va "yozmoqda…" ko'rinishi
+- Xabarlar: formatlash (qalin, kursiv, kod, spoiler, iqtibos, havolalar), javob, tahrir, o'chirish, uzatish, reaksiyalar, ovozsiz yuborish
+- Media: rasm va albomlar, galereya, video, GIF, dumaloq video, ovozli xabar to'lqini, stikerlar (oddiy/video/animatsiyali), fayllar; yuborish (📎, sudrab tashlash, Ctrl+V)
+- So'rovnomalar (ovoz berish), havola prevyusi, joylashuv, kontakt, bot tugmalari
+- Suhbat: o'qilmaganlar ajratgichi, qadalgan xabarlar paneli, chat ichida qidiruv, profil paneli (umumiy media, fayllar, havolalar, a'zolar)
+- Yozish maydoni: emoji va stiker paneli, Ctrl+B / Ctrl+I, Telegram bilan sinxron qoralamalar
+- Global qidiruv (chatlar va xabarlar), brauzer bildirishnomalari, sozlamalar (matn o'lchami, chat foni)
 
 **O'zimizniki**
 - Lotin ↔ kirill o'girish: butun chat, alohida xabar yoki yozish maydoni uchun

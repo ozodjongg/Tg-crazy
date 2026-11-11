@@ -287,9 +287,9 @@ function formatted(source: string) {
   return { text, entities: toTlEntities(entities) };
 }
 
-export async function sendText(chatId: number, text: string, replyTo?: number): Promise<MessageItem> {
+export async function sendText(chatId: number, text: string, replyTo?: number, silent = false): Promise<MessageItem> {
   const client = await getClient();
-  return item(await client.sendText(chatId, formatted(text), { replyTo }));
+  return item(await client.sendText(chatId, formatted(text), { replyTo, silent }));
 }
 
 export async function editText(chatId: number, messageId: number, text: string): Promise<MessageItem> {
