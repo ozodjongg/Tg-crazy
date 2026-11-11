@@ -124,6 +124,44 @@ export async function loadFolders(): Promise<FolderRule[]> {
   return out;
 }
 
+// ---- Chat amallari ----
+
+export async function setPinned(chatId: number, pinned: boolean): Promise<void> {
+  const client = await getClient();
+  const peer = await client.resolvePeer(chatId);
+  await client.call({ _: "messages.toggleDialogPin", pinned, peer: { _: "inputDialogPeer", peer } });
+}
+
+/** Ovozsiz qilish (muddatsiz) yoki yoqish. */
+export async function setMuted(chatId: number, muted: boolean): Promise<void> {
+  const client = await getClient();
+  const peer = await client.resolvePeer(chatId);
+  await client.call({
+    _: "account.updateNotifySettings",
+    peer: { _: "inputNotifyPeer", peer },
+    // 2^31-1 — Telegram'da "doimiy" ovozsiz
+    settings: { _: "inputPeerNotifySettings", muteUntil: muted ? 2147483647 : 0 },
+  });
+}
+
+export async function setArchived(chatId: number, archived: boolean): Promise<void> {
+  const client = await getClient();
+  if (archived) await client.archiveChats(chatId);
+  else await client.unarchiveChats(chatId);
+}
+
+export async function markUnread(chatId: number): Promise<void> {
+  const client = await getClient();
+  await client.markChatUnread(chatId);
+}
+
+/** Shaxsiy chat — tarix o'chiriladi (revoke: ikkala tomonda); guruh/kanal — tark etiladi. */
+export async function deleteChat(chatId: number, revoke: boolean): Promise<void> {
+  const client = await getClient();
+  if (chatId > 0) await client.deleteHistory(chatId, { mode: revoke ? "revoke" : "delete" });
+  else await client.leaveChat(chatId, { clear: true });
+}
+
 // ---- Xabarlar ----
 
 export const PAGE_SIZE = 50;

@@ -15,6 +15,7 @@ import { Logo } from "./Logo";
 import { Lightbox } from "./MediaView";
 import { MessageBubble } from "./MessageBubble";
 import { MessageMenu, type MenuAction } from "./MessageMenu";
+import { chatTitle } from "./ChatList";
 
 const KIND_LABEL: Record<ChatKind, string> = {
   user: "shaxsiy chat",
@@ -150,7 +151,7 @@ export function MessagePane() {
 
   if (activeChatId === null) return <EmptyState />;
 
-  const title = chat?.title ?? "Chat";
+  const title = chat ? chatTitle(chat) : "Chat";
   const kind: ChatKind = chat?.kind ?? (activeChatId < 0 ? "group" : "user");
   const inGroup = kind === "group";
   const readMaxId = chat?.readOutboxMaxId ?? 0;
@@ -224,7 +225,7 @@ export function MessagePane() {
         >
           <Icon name="back" />
         </button>
-        <Avatar id={activeChatId} title={title} size={40} />
+        <Avatar id={activeChatId} title={title} size={40} saved={chat?.isSelf} />
         <div className="min-w-0 flex-1 pl-1">
           <h2 className="truncate font-medium leading-tight">{title}</h2>
           <p className={`truncate text-sm ${sub.accent ? "text-accent" : "text-muted"}`} aria-live="polite">

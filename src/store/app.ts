@@ -23,6 +23,10 @@ function readTheme(): Theme {
   }
 }
 
+export type ChatAction =
+  | "pin" | "unpin" | "mute" | "unmute" | "archive" | "unarchive" | "read" | "unread"
+  | "delete" | "delete-both";
+
 export type AuthStep = "loading" | "no-credentials" | "phone" | "code" | "password" | "ready";
 
 interface AppState {
@@ -70,6 +74,8 @@ interface AppState {
   forwardMessage: (msg: MessageItem, toChatId: number) => Promise<void>;
   react: (msg: MessageItem, emoji: string) => Promise<void>;
   notifyTyping: () => void;
+  /** Chat amallari (kontekst menyudan); muvaffaqiyatsiz bo'lsa holat qaytariladi. */
+  chatAction: (chatId: number, action: ChatAction) => Promise<void>;
   votePoll: (msg: MessageItem, answers: string[]) => Promise<void>;
   pressButton: (msg: MessageItem, data: string) => Promise<void>;
   showNotice: (text: string | null) => void;
@@ -394,6 +400,56 @@ export const useApp = create<AppState>((set, get) => {
       } catch (err) {
         if (get().activeChatId === msg.chatId) set({ messages: replaceMessage(get().messages, msg) });
         set({ error: errorText(err) });
+      }
+    },
+
+    async chatAction(chatId, action) {
+      const before = get().chats;
+      const patch = (p: Partial<ChatItem>) =>
+        set({ chats: sortChats(get().chats.map((c) => (c.id === chatId ? { ...c, ...p } : c))) });
+      // Darhol ko'rsatamiz, server javobini kutmaymiz
+      switch (action) {
+        case "pin": patch({ pinned: true }); break;
+        case "unpin": patch({ pinned: false }); break;
+        case "mute": patch({ muted: true }); break;
+        case "unmute": patch({ muted: false }); break;
+        case "archive": patch({ archived: true, pinned: false }); break;
+        case "unarchive": patch({ archived: false }); break;
+        case "read": patch({ unread: 0, mentions: 0, markedUnread: false }); break;
+        case "unread": patch({ markedUnread: true }); break;
+        case "delete":
+        case "delete-both":
+          set({ chats: get().chats.filter((c) => c.id !== chatId) });
+          if (get().activeChatId === chatId) void get().openChat(null);
+          break;
+      }
+      try {
+        switch (action) {
+          case "pin":
+          case "unpin":
+            await tg.setPinned(chatId, action === "pin");
+            break;
+          case "mute":
+          case "unmute":
+            await tg.setMuted(chatId, action === "mute");
+            break;
+          case "archive":
+          case "unarchive":
+            await tg.setArchived(chatId, action === "archive");
+            break;
+          case "read":
+            await tg.markRead(chatId);
+            break;
+          case "unread":
+            await tg.markUnread(chatId);
+            break;
+          case "delete":
+          case "delete-both":
+            await tg.deleteChat(chatId, action === "delete-both");
+            break;
+        }
+      } catch (err) {
+        set({ chats: before, error: errorText(err) });
       }
     },
 

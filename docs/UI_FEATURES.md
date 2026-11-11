@@ -30,12 +30,12 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 
 | Funksiya | Holat |
 |---|---|
-| Haqiqiy avatarlar, onlayn nuqtasi, tasdiqlangan belgisi | ⬜ |
-| Qoralama ko'rinishi ("Qoralama: …"), "yozmoqda…" ro'yxatda | ⬜ |
-| @ — eslatilganlar nishoni, qo'lda "o'qilmagan" belgisi | ⬜ |
-| "Saqlangan xabarlar" (o'z chatingiz) | ⬜ |
-| Kontekst menyu: qadash, ovozsiz qilish, o'qilgan/o'qilmagan, arxivlash, o'chirish | ⬜ |
-| Arxiv qatori va arxiv ko'rinishi | ⬜ |
+| Haqiqiy avatarlar, onlayn nuqtasi, tasdiqlangan belgisi | ✅ |
+| Qoralama ko'rinishi ("Qoralama: …"), "yozmoqda…" ro'yxatda | ✅ |
+| @ — eslatilganlar nishoni, qo'lda "o'qilmagan" belgisi | ✅ |
+| "Saqlangan xabarlar" (o'z chatingiz) | ✅ |
+| Kontekst menyu: qadash, ovozsiz qilish, o'qilgan/o'qilmagan, arxivlash, o'chirish | ✅ |
+| Arxiv qatori va arxiv ko'rinishi | ✅ |
 | Bir nechta chatni tanlash | ⬜ |
 | Sudrab tartiblash (qadalganlar) | ⬜ |
 
@@ -74,7 +74,7 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Global qidiruv: chatlar va xabarlar | ⬜ |
 | Bildirishnomalar (brauzer), sarlavhada o'qilmaganlar soni | ⬜ |
 | Sozlamalar: matn o'lchami, chat foni, bildirishnomalar | ⬜ |
-| Rasm ko'rgichda galereya (oldingi/keyingi), saqlash | ⬜ |
+| Rasm ko'rgichda galereya (oldingi/keyingi), saqlash | ✅ |
 | Kontaktlar, yangi shaxsiy chat / guruh / kanal yaratish | ⬜ |
 | Profilni tahrirlash, maxfiylik sozlamalari, faol seanslar | ⬜ |
 | Ko'p akkaunt | ⬜ |
