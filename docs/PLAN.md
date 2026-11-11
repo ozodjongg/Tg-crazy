@@ -174,8 +174,9 @@ Fork bo'lmagani uchun GPL majburiyati yo'q, lekin GPL forklardan **kod ko'chirib
 
 ### 5.3. Qoidalar
 
-- Hech qanday o'z serverimiz orqali Telegram trafigi yo'q. AI funksiyalari uchun server
-  kerak bo'lganda, nima yuborilishi foydalanuvchiga har safar ko'rsatiladi.
+- Hech qanday o'z serverimiz orqali Telegram trafigi yo'q. Backend foydalanuvchini o'z botimiz
+  orqali taniydi (sessiya uzatilmaydi); AI'ga nima yuborilishi foydalanuvchiga ko'rsatiladi va
+  matn serverda saqlanmaydi.
 - Har bir "kuchaytirish" sozlamalarda alohida o'chirib-yoqiladi.
 - §3 qizil chiziqlari kod darajasida ham saqlanadi (masalan, chat ochilganda o'qilgan deb
   belgilash o'chirilmaydi).
@@ -191,17 +192,24 @@ Fork bo'lmagani uchun GPL majburiyati yo'q, lekin GPL forklardan **kod ko'chirib
 - [ ] **Egasi:** `my.telegram.org` da `api_id`/`api_hash` olish va haqiqiy akkaunt bilan sinash
 - [ ] **Egasi:** API shartlarini to'liq o'qish; ilova nomi va ikonkasini tanlash
 
-**Faza 1 — to'laqonli messenjer**
-- Media: rasm/video/fayl ko'rish va yuborish, ovozli xabarlar, stikerlar
-- Javob berish, tahrirlash, o'chirish, forward, reaksiyalar
-- Tarixni yuqoriga varaqlash, o'qilganlik belgilari, "yozmoqda" holati
-- Papkalar, arxiv, global qidiruv, profil/guruh ma'lumoti
+**Faza 1a — asosiy messenjer + backend** ✅ (kod yozilgan; Telegram bilan haqiqiy sinov kutilmoqda)
+- [x] Javob berish, tahrirlash, o'chirish, uzatish, reaksiyalar; tarixni varaqlash
+- [x] Rasmlarni ko'rish; fayl/video/ovozni yuklab olish; fayl yuborish
+- [x] O'qilganlik, "yozmoqda", onlayn holati — jonli; Telegram papkalari
+- [x] Go backend (`backend/`): bot orqali tasdiqlash, tariflar va obuna holati, sozlamalar sinxroni, AI (xulosa, tarjima, javob qoralamasi) kunlik limit bilan
+- [ ] **Egasi:** `api_id`/`api_hash`; BotFather'da bot va tokeni; Anthropic API kaliti; Pro tarifi narxi
+
+**Faza 1b — messenjerni to'ldirish**
+- Stikerlar/GIF/emoji paneli, ovozli xabar yozish, albomlar
+- Global qidiruv, chat ichida qidiruv, profil va guruh ma'lumoti/boshqaruvi
+- Bildirishnomalar, arxiv ko'rinishi, qoralamalar, ko'p akkaunt
 - Rasmiy sponsorlik xabarlarini ko'rsatish (§3, 4-band)
 - Sozlamalar ekrani; PWA (o'rnatish, oflayn qobiq)
+- Keyinroq: hikoyalar, qo'ng'iroqlar, maxfiy chatlar
 
 **Faza 2 — kuchaytirishlar** (§4 jadvalidan)
 - Bezovtalikni o'chirish, xabar tafsilotlari, muallifsiz forward, tab/papka kustomizatsiyasi
-- Tarjimon; AI: o'qilmaganlar xulosasi, ovozli xabar matni, javob qoralamasi
+- AI: ovozli xabar matni, aqlli qidiruv (xulosa, tarjima va qoralama Faza 1a da qilingan)
 - Lokal filtrlar, chat qulfi, ko'p akkaunt
 
 **Faza 3 — boshqa OS'lar**
@@ -209,7 +217,8 @@ Fork bo'lmagani uchun GPL majburiyati yo'q, lekin GPL forklardan **kod ko'chirib
 - Google Play / App Store talablari
 
 **Faza 4 — o'sish va monetizatsiya**
-- To'lov tizimlari (Click/Payme) bilan obuna; Premium funksiyalarni sotish yoki ochish — yo'q (§3)
+- To'lov tizimlari (Click/Payme) ni `backend/internal/billing` interfeysiga ulash; hozircha obuna qo'lda beriladi
+- Telegram Premium funksiyalarini sotish yoki ochish — yo'q (§3)
 
 ### 5.5. Xavflar
 

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useApp, type Theme } from "@/store/app";
+import { useServices } from "@/store/services";
 import { Avatar } from "./Avatar";
 import { Icon, type IconName } from "./Icon";
 
@@ -10,6 +11,79 @@ const THEMES: { id: Theme; label: string; icon: IconName }[] = [
   { id: "light", label: "Och", icon: "sun" },
   { id: "dark", label: "To'q", icon: "moon" },
 ];
+
+/** Tg-crazy xizmatlari (backend): ulanish holati, tarif va AI limiti. */
+function Services() {
+  const status = useServices((s) => s.status);
+  const profile = useServices((s) => s.profile);
+  const error = useServices((s) => s.error);
+  const connect = useServices((s) => s.connect);
+  const disconnect = useServices((s) => s.disconnect);
+  const [asking, setAsking] = useState(false);
+
+  if (status === "off") return null;
+
+  return (
+    <>
+      <p className="px-2 pb-1 pt-2 text-xs text-muted">Tg-crazy xizmatlari</p>
+      <div className="rounded-xl bg-panel p-3 text-sm">
+        {status === "checking" && <p className="text-muted">Tekshirilmoqda…</p>}
+        {status === "unavailable" && <p className="text-muted">Hozircha mavjud emas</p>}
+        {status === "connecting" && <p className="text-muted" role="status">Bot tasdig&apos;i kutilmoqda…</p>}
+        {status === "connected" && profile && (
+          <>
+            <p className="flex items-center justify-between">
+              <span className="font-medium">{profile.subscription.plan.name} tarifi</span>
+              {profile.subscription.expires_at && (
+                <span className="text-xs text-muted">
+                  {new Date(profile.subscription.expires_at).toLocaleDateString("ru-RU")} gacha
+                </span>
+              )}
+            </p>
+            <p className="mt-1 text-muted">
+              {profile.ai_enabled ? `AI: bugun ${profile.ai.used} / ${profile.ai.limit}` : "AI hozircha o'chiq"}
+            </p>
+            <button className="mt-2 text-xs text-muted underline hover:text-text" onClick={() => void disconnect()}>
+              Xizmatlardan uzish
+            </button>
+          </>
+        )}
+        {status === "disconnected" && !asking && (
+          <>
+            <p className="text-muted">AI yordamchi va sozlamalar sinxroni.</p>
+            <button className="mt-2 font-medium text-accent hover:text-accent-hover" onClick={() => setAsking(true)}>
+              Ulanish
+            </button>
+          </>
+        )}
+        {status === "disconnected" && asking && (
+          <>
+            <p>
+              Kimligingizni tasdiqlash uchun akkauntingizdan Tg-crazy botiga bitta xabar (bir martalik kod)
+              yuboriladi. Sessiyangiz va yozishmalaringiz serverga uzatilmaydi.
+            </p>
+            <div className="mt-2 flex gap-3">
+              <button
+                className="font-medium text-accent hover:text-accent-hover"
+                onClick={() => {
+                  setAsking(false);
+                  void connect();
+                }}
+              >
+                Roziman, ulash
+              </button>
+              <button className="text-muted hover:text-text" onClick={() => setAsking(false)}>
+                Bekor qilish
+              </button>
+            </div>
+          </>
+        )}
+        {error && <p role="alert" className="mt-2 text-xs text-danger">{error}</p>}
+      </div>
+      <div className="my-2 border-t border-border" />
+    </>
+  );
+}
 
 export function SideMenu({ onClose }: { onClose: () => void }) {
   const me = useApp((s) => s.me);
@@ -28,7 +102,7 @@ export function SideMenu({ onClose }: { onClose: () => void }) {
       <button className="fixed inset-0 z-10 cursor-default" aria-label="Menyuni yopish" onClick={onClose} />
       <div
         role="menu"
-        className="absolute left-3 top-14 z-20 w-64 rounded-2xl border border-border bg-bg p-2 shadow-lg"
+        className="absolute left-3 top-14 z-20 w-72 rounded-2xl border border-border bg-bg p-2 shadow-lg"
       >
         {me && (
           <div className="flex items-center gap-3 px-2 py-2">
@@ -55,6 +129,7 @@ export function SideMenu({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <div className="my-2 border-t border-border" />
+        <Services />
         <button
           role="menuitem"
           className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left text-danger hover:bg-danger-soft"

@@ -10,15 +10,21 @@ serverlariga ulanadi.
 
 ## Hozir nima bor
 
-Kirish va xabar almashish hali haqiqiy akkauntda sinalmagan — buning uchun `api_id` kerak
-(pastga qarang). Interfeys va lotin↔kirill o'girish tekshirilgan.
+Telegram bilan haqiqiy almashinuv hali sinalmagan — buning uchun `api_id` kerak (pastga qarang).
+Interfeys namunaviy ma'lumot bilan, backend esa testlar va lokal server bilan tekshirilgan.
 
+**Messenjer**
 - Kirish: telefon → kod → ikki bosqichli parol
-- Chatlar ro'yxati (qidiruv lotin/kirillga bog'liq emas), xabarlar tarixi, matn yuborish, yangi xabarlar
-- Lotin ↔ kirill o'girish: butun chat, alohida xabar yoki yozish maydoni uchun (`Aa↔Аа` tugmasi)
-- Lokal papkalar: Hammasi / Shaxsiy / Guruhlar / Kanallar
-- Mobil ko'rinish; mavzu: tizim / och / to'q (menyudan)
-- Dizayn: Telegram Web tuzilmasi, iliq krem va "clay" ranglar palitrasi
+- Chatlar: Telegram'dagi papkalaringiz (bo'lmasa — Shaxsiy / Guruhlar / Kanallar), qidiruv lotin/kirillga bog'liq emas
+- Xabarlar: yuborish, javob berish, tahrirlash, o'chirish, uzatish, reaksiyalar; tarixni yuqoriga varaqlash
+- Media: rasmlarni ko'rish, fayl/video/ovozli xabarni yuklab olish va ijro etish; fayl yuborish (📎 yoki sudrab tashlash)
+- Jonli: yangi xabarlar, tahrir va o'chirishlar, o'qilganlik (✓✓), "yozmoqda…", onlayn holati
+
+**O'zimizniki**
+- Lotin ↔ kirill o'girish: butun chat, alohida xabar yoki yozish maydoni uchun
+- AI (backend ulangan bo'lsa): suhbat xulosasi, xabar tarjimasi, javob qoralamasi — har safar nima yuborilishi ko'rsatiladi
+- Sozlamalar sinxroni (mavzu, AI tili) qurilmalar orasida
+- Mavzu: tizim / och / to'q; mobil ko'rinish
 
 ## Ishga tushirish
 
@@ -26,10 +32,13 @@ Kirish va xabar almashish hali haqiqiy akkauntda sinalmagan — buning uchun `ap
 2. Sozlang va ishga tushiring:
 
    ```bash
-   cp .env.example .env.local   # ikkala qiymatni to'ldiring
+   cp .env.example .env.local   # api_id va api_hash ni to'ldiring
    npm install
    npm run dev                  # http://localhost:3000
    ```
+
+Backend ixtiyoriy (AI, obuna, sozlamalar sinxroni) — [backend/README.md](backend/README.md).
+Ishga tushirgach, `.env.local` ga `NEXT_PUBLIC_API_URL=http://localhost:8080` qo'shing.
 
 ## Buyruqlar
 
@@ -43,5 +52,7 @@ Kirish va xabar almashish hali haqiqiy akkauntda sinalmagan — buning uchun `ap
 
 - `src/lib/telegram/` — Telegram bilan ishlash (`@mtcute/web`); kutubxona faqat shu yerda ishlatiladi
 - `src/lib/translit/` — lotin ↔ kirill
-- `src/store/` — ilova holati (Zustand)
+- `src/lib/backend/` — Tg-crazy backend klienti
+- `src/store/` — ilova holati (Zustand): `app.ts` — messenjer, `services.ts` — backend xizmatlari
 - `src/components/` — interfeys
+- `backend/` — Go xizmati (akkaunt/obuna, AI, sozlamalar)

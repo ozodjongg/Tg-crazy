@@ -2,6 +2,8 @@
 
 import { useEffect } from "react";
 import { useApp } from "@/store/app";
+import { useServices } from "@/store/services";
+import { AiDialog } from "./AiDialog";
 import { ChatList } from "./ChatList";
 import { Login } from "./Login";
 import { Logo } from "./Logo";
@@ -12,9 +14,16 @@ export function App() {
   const init = useApp((s) => s.init);
   const activeChatId = useApp((s) => s.activeChatId);
 
+  const initServices = useServices((s) => s.init);
+
   useEffect(() => {
     void init();
   }, [init]);
+
+  // Xizmatlar faqat Telegram'ga kirilgandan keyin tekshiriladi
+  useEffect(() => {
+    if (step === "ready") void initServices();
+  }, [step, initServices]);
 
   if (step === "loading") {
     return (
@@ -38,6 +47,7 @@ export function App() {
       <section className={`${activeChatId === null ? "hidden" : "flex"} min-w-0 flex-1 flex-col md:flex`}>
         <MessagePane />
       </section>
+      <AiDialog />
     </main>
   );
 }

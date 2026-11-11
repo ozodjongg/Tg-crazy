@@ -2,7 +2,9 @@ import { create } from "zustand";
 import * as tg from "@/lib/telegram/api";
 import { hasCredentials } from "@/lib/telegram/client";
 import { errorText } from "@/lib/telegram/errors";
-import type { ChatItem, ChatKind, Me, MessageItem } from "@/lib/telegram/types";
+import { forgetChatMedia } from "@/lib/telegram/media";
+import { itemPreview, type ChatItem, type ChatKind, type Me, type MessageItem } from "@/lib/telegram/types";
+import { prependOlder, removeMessages, replaceMessage, toggleReaction, upsertMessage } from "@/lib/messages";
 
 export type Theme = "system" | "light" | "dark";
 const THEME_KEY = "tg-crazy:theme";
@@ -31,9 +33,20 @@ interface AppState {
   theme: Theme;
 
   chats: ChatItem[];
+  folders: tg.FolderRule[];
   activeChatId: number | null;
   messages: MessageItem[];
   messagesLoading: boolean;
+  hasMore: boolean;
+  loadingOlder: boolean;
+  /** Yozish maydoni holati: javob berilayotgan yoki tahrirlanayotgan xabar */
+  replyTo: MessageItem | null;
+  editing: MessageItem | null;
+  /** chatId -> "yozmoqda" holati tugaydigan vaqt (ms) */
+  typing: Record<number, number>;
+  upload: { name: string; fraction: number } | null;
+  /** Yozish maydonidagi matn */
+  draft: string;
 
   init: () => Promise<void>;
   setTheme: (theme: Theme) => void;
@@ -42,20 +55,37 @@ interface AppState {
   submitPassword: (password: string) => Promise<void>;
   backToPhone: () => void;
   logOut: () => Promise<void>;
+  clearError: () => void;
 
   openChat: (chatId: number | null) => Promise<void>;
+  loadOlder: () => Promise<void>;
+  setReplyTo: (msg: MessageItem | null) => void;
+  setEditing: (msg: MessageItem | null) => void;
+  setDraft: (text: string) => void;
   send: (text: string) => Promise<void>;
+  sendFile: (file: File, caption: string) => Promise<void>;
+  deleteMessage: (msg: MessageItem, revoke: boolean) => Promise<void>;
+  forwardMessage: (msg: MessageItem, toChatId: number) => Promise<void>;
+  react: (msg: MessageItem, emoji: string) => Promise<void>;
+  notifyTyping: () => void;
 }
 
 let phone = "";
 let phoneCodeHash = "";
 let initStarted = false;
+let lastTypingSent = 0;
+
+const TYPING_TTL = 6000;
+const TYPING_THROTTLE = 4000;
 
 export function sortChats(chats: ChatItem[]): ChatItem[] {
   return [...chats].sort(
     (a, b) => Number(b.pinned) - Number(a.pinned) || (b.lastDate ?? 0) - (a.lastDate ?? 0),
   );
 }
+
+/** Supergruppa va kanallarda xabar ID lari chatga xos; qolganlarida umumiy. */
+const isChannelId = (chatId: number) => chatId <= -1_000_000_000_000;
 
 export const useApp = create<AppState>((set, get) => {
   /** So'rovni bajaradi; xatoni o'zbekcha matnga aylantirib ko'rsatadi. */
@@ -70,33 +100,93 @@ export const useApp = create<AppState>((set, get) => {
     }
   }
 
+  /** Xatoni ko'rsatadi va chaqiruvchiga qayta uzatadi (UI holatini tiklashi uchun). */
+  function fail(err: unknown): never {
+    set({ error: errorText(err) });
+    throw err;
+  }
+
   async function enter(me: Me) {
     set({ step: "ready", me, error: null });
-    await tg.onNewMessage(handleIncoming);
+    await tg.subscribe({
+      onMessage: handleIncoming,
+      onEdit(msg) {
+        const s = get();
+        set({
+          messages: msg.chatId === s.activeChatId ? replaceMessage(s.messages, msg) : s.messages,
+          chats: s.chats.map((c) => (c.id === msg.chatId && c.lastId === msg.id ? { ...c, lastText: itemPreview(msg) } : c)),
+        });
+      },
+      onDelete(ids, channelId) {
+        const { activeChatId, messages } = get();
+        if (activeChatId === null) return;
+        const sameScope = channelId === null ? !isChannelId(activeChatId) : channelId === activeChatId;
+        if (sameScope) set({ messages: removeMessages(messages, ids) });
+      },
+      onReadOutbox(chatId, maxId) {
+        set({
+          chats: get().chats.map((c) =>
+            c.id === chatId && c.readOutboxMaxId < maxId ? { ...c, readOutboxMaxId: maxId } : c,
+          ),
+        });
+      },
+      onTyping(chatId, userId, active) {
+        if (userId === get().me?.id) return;
+        const typing = { ...get().typing };
+        if (!active) {
+          delete typing[chatId];
+          set({ typing });
+          return;
+        }
+        const until = Date.now() + TYPING_TTL;
+        typing[chatId] = until;
+        set({ typing });
+        setTimeout(() => {
+          const current = get().typing;
+          if (current[chatId] !== until) return;
+          const next = { ...current };
+          delete next[chatId];
+          set({ typing: next });
+        }, TYPING_TTL);
+      },
+      onPresence(userId, presence) {
+        set({ chats: get().chats.map((c) => (c.id === userId && c.kind === "user" ? { ...c, presence } : c)) });
+      },
+    });
     set({ chats: sortChats(await tg.loadChats()) });
+    // Papkalar ixtiyoriy: yuklanmasa lokal turkumlar ishlatiladi
+    tg.loadFolders().then((folders) => set({ folders })).catch(() => {});
   }
 
   function handleIncoming(msg: MessageItem, chat?: { title: string; kind: ChatKind }) {
-    const { chats, activeChatId, messages } = get();
+    const { chats, activeChatId, messages, typing } = get();
     const isActive = msg.chatId === activeChatId;
     const existing = chats.find((c) => c.id === msg.chatId);
+    const isNewest = !existing || msg.id >= existing.lastId;
     const updated: ChatItem = {
       id: msg.chatId,
       title: existing?.title ?? chat?.title ?? "Chat",
       kind: existing?.kind ?? chat?.kind ?? (msg.chatId > 0 ? "user" : "group"),
-      readOutboxMaxId: existing?.readOutboxMaxId ?? 0,
-      lastOutgoing: msg.outgoing,
-      lastSender: msg.senderName,
       pinned: existing?.pinned ?? false,
       muted: existing?.muted ?? false,
-      lastText: msg.text,
-      lastDate: msg.date,
+      archived: existing?.archived ?? false,
+      isContact: existing?.isContact ?? false,
+      presence: existing?.presence ?? null,
+      readOutboxMaxId: existing?.readOutboxMaxId ?? 0,
+      lastId: isNewest ? msg.id : existing.lastId,
+      lastText: isNewest ? itemPreview(msg) : existing.lastText,
+      lastDate: isNewest ? msg.date : existing.lastDate,
+      lastOutgoing: isNewest ? msg.outgoing : existing.lastOutgoing,
+      lastSender: isNewest ? msg.senderName : existing.lastSender,
       unread: isActive || msg.outgoing ? 0 : (existing?.unread ?? 0) + 1,
     };
+    // Xabar keldi — yuboruvchi endi "yozmayapti"
+    const nextTyping = { ...typing };
+    if (!msg.outgoing) delete nextTyping[msg.chatId];
     set({
       chats: sortChats([updated, ...chats.filter((c) => c.id !== msg.chatId)]),
-      messages:
-        isActive && !messages.some((m) => m.id === msg.id) ? [...messages, msg] : messages,
+      messages: isActive ? upsertMessage(messages, msg) : messages,
+      typing: nextTyping,
     });
     if (isActive && !msg.outgoing) void tg.markRead(msg.chatId).catch(() => {});
   }
@@ -108,9 +198,17 @@ export const useApp = create<AppState>((set, get) => {
     busy: false,
     theme: "system",
     chats: [],
+    folders: [],
     activeChatId: null,
     messages: [],
     messagesLoading: false,
+    hasMore: false,
+    loadingOlder: false,
+    replyTo: null,
+    editing: null,
+    typing: {},
+    upload: null,
+    draft: "",
 
     async init() {
       if (initStarted) return;
@@ -169,8 +267,15 @@ export const useApp = create<AppState>((set, get) => {
         window.location.reload();
       }),
 
+    clearError: () => set({ error: null }),
+
     async openChat(chatId) {
-      set({ activeChatId: chatId, messages: [], messagesLoading: chatId !== null, error: null });
+      const previous = get().activeChatId;
+      if (previous !== null && previous !== chatId) forgetChatMedia(previous);
+      set({
+        activeChatId: chatId, messages: [], messagesLoading: chatId !== null, hasMore: false,
+        loadingOlder: false, replyTo: null, editing: null, error: null, upload: null, draft: "",
+      });
       if (chatId === null) return;
       try {
         const messages = await tg.loadHistory(chatId);
@@ -178,6 +283,7 @@ export const useApp = create<AppState>((set, get) => {
         set({
           messages,
           messagesLoading: false,
+          hasMore: messages.length >= tg.PAGE_SIZE,
           chats: get().chats.map((c) => (c.id === chatId ? { ...c, unread: 0 } : c)),
         });
         void tg.markRead(chatId).catch(() => {});
@@ -186,18 +292,106 @@ export const useApp = create<AppState>((set, get) => {
       }
     },
 
+    async loadOlder() {
+      const { activeChatId: chatId, messages, hasMore, loadingOlder } = get();
+      const oldest = messages[0];
+      if (chatId === null || !oldest || !hasMore || loadingOlder) return;
+      set({ loadingOlder: true });
+      try {
+        const older = await tg.loadHistory(chatId, { id: oldest.id, date: Math.floor(oldest.date / 1000) });
+        if (get().activeChatId !== chatId) return;
+        set({ messages: prependOlder(get().messages, older), hasMore: older.length >= tg.PAGE_SIZE });
+      } catch (err) {
+        if (get().activeChatId === chatId) set({ error: errorText(err) });
+      } finally {
+        if (get().activeChatId === chatId) set({ loadingOlder: false });
+      }
+    },
+
+    setReplyTo: (msg) => set({ replyTo: msg, editing: null }),
+    setEditing: (msg) => set({ editing: msg, replyTo: null, draft: msg?.text ?? "" }),
+    setDraft: (draft) => set({ draft }),
+
     async send(text) {
-      const chatId = get().activeChatId;
+      const { activeChatId: chatId, editing, replyTo } = get();
       const body = text.trim();
       if (chatId === null || !body) return;
       try {
-        const msg = await tg.sendText(chatId, body);
-        // O'z xabarimiz update orqali ham kelishi mumkin — handleIncoming takrorni tashlaydi
+        if (editing) {
+          if (body !== editing.text) {
+            const msg = await tg.editText(chatId, editing.id, body);
+            if (get().activeChatId === chatId) set({ messages: replaceMessage(get().messages, msg) });
+          }
+          set({ editing: null, draft: "" });
+          return;
+        }
+        const msg = await tg.sendText(chatId, body, replyTo?.id);
+        set({ replyTo: null, draft: "" });
+        // O'z xabarimiz update orqali ham kelishi mumkin — upsert takrorni birlashtiradi
         handleIncoming(msg);
       } catch (err) {
-        set({ error: errorText(err) });
-        throw err;
+        fail(err);
       }
+    },
+
+    async sendFile(file, caption) {
+      const { activeChatId: chatId, replyTo } = get();
+      if (chatId === null) return;
+      set({ upload: { name: file.name, fraction: 0 }, error: null });
+      try {
+        const msg = await tg.sendFile(chatId, file, {
+          caption: caption.trim(),
+          replyTo: replyTo?.id,
+          onProgress: (fraction) => {
+            if (get().upload) set({ upload: { name: file.name, fraction } });
+          },
+        });
+        set({ replyTo: null, draft: "" });
+        handleIncoming(msg);
+      } catch (err) {
+        fail(err);
+      } finally {
+        set({ upload: null });
+      }
+    },
+
+    async deleteMessage(msg, revoke) {
+      try {
+        await tg.deleteMessages(msg.chatId, [msg.id], revoke);
+        if (get().activeChatId === msg.chatId) set({ messages: removeMessages(get().messages, [msg.id]) });
+      } catch (err) {
+        fail(err);
+      }
+    },
+
+    async forwardMessage(msg, toChatId) {
+      try {
+        const sent = await tg.forwardMessages(msg.chatId, [msg.id], toChatId);
+        sent.forEach((m) => handleIncoming(m));
+      } catch (err) {
+        fail(err);
+      }
+    },
+
+    async react(msg, emoji) {
+      // Darhol ko'rsatamiz; server javobi kelgach aniq holat bilan almashtiriladi
+      const { next, chosen } = toggleReaction(msg, emoji);
+      set({ messages: replaceMessage(get().messages, next) });
+      try {
+        const updated = await tg.setReaction(msg.chatId, msg.id, chosen);
+        if (updated && get().activeChatId === msg.chatId) set({ messages: replaceMessage(get().messages, updated) });
+      } catch (err) {
+        if (get().activeChatId === msg.chatId) set({ messages: replaceMessage(get().messages, msg) });
+        set({ error: errorText(err) });
+      }
+    },
+
+    notifyTyping() {
+      const chatId = get().activeChatId;
+      const now = Date.now();
+      if (chatId === null || now - lastTypingSent < TYPING_THROTTLE) return;
+      lastTypingSent = now;
+      void tg.sendTyping(chatId).catch(() => {});
     },
   };
 });

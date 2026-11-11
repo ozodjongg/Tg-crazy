@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { FOLDERS, filterChats, unreadChats, type Folder } from "@/lib/chats";
+import { buildFolders, filterChats, unreadChats } from "@/lib/chats";
 import { formatChatDate } from "@/lib/format";
 import type { ChatItem } from "@/lib/telegram/types";
 import { useApp } from "@/store/app";
@@ -76,9 +76,13 @@ export function ChatList() {
   const activeChatId = useApp((s) => s.activeChatId);
   const openChat = useApp((s) => s.openChat);
   const [query, setQuery] = useState("");
-  const [folder, setFolder] = useState<Folder>("all");
+  const rules = useApp((s) => s.folders);
+  const [folderKey, setFolderKey] = useState("all");
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const folders = useMemo(() => buildFolders(rules), [rules]);
+  // Tanlangan papka Telegram'da o'chirilgan bo'lsa — "Hammasi"
+  const folder = folders.find((f) => f.key === folderKey) ?? folders[0];
   const visible = useMemo(() => filterChats(chats, folder, query), [chats, folder, query]);
 
   return (
@@ -107,17 +111,17 @@ export function ChatList() {
       {menuOpen && <SideMenu onClose={() => setMenuOpen(false)} />}
 
       <nav aria-label="Papkalar" className="flex overflow-x-auto border-b border-border px-2">
-        {FOLDERS.map((f) => {
-          const count = unreadChats(chats, f.id);
-          const selected = folder === f.id;
+        {folders.map((f) => {
+          const count = unreadChats(chats, f);
+          const selected = folder.key === f.key;
           return (
             <button
-              key={f.id}
+              key={f.key}
               aria-pressed={selected}
-              className={`flex flex-1 shrink-0 items-center justify-center gap-1 border-b-2 px-1.5 pb-2 pt-1.5 text-sm font-medium ${
+              className={`flex flex-1 shrink-0 items-center justify-center gap-1 whitespace-nowrap border-b-2 px-2 pb-2 pt-1.5 text-sm font-medium ${
                 selected ? "border-accent text-accent" : "border-transparent text-muted hover:text-text"
               }`}
-              onClick={() => setFolder(f.id)}
+              onClick={() => setFolderKey(f.key)}
             >
               {f.label}
               {count > 0 && (
