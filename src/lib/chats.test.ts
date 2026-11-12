@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LOCAL_FOLDERS, buildFolders, filterChats, matchesRule, unreadChats } from "./chats";
+import { LOCAL_FOLDERS, buildFolders, filterChats, matchesRule, unreadChats, movePinned, pinnedInOrder } from "./chats";
 import type { FolderRule } from "./telegram/api";
 import { formatDayLabel, isSameDay } from "./format";
 import type { ChatItem, ChatKind } from "./telegram/types";
@@ -89,5 +89,29 @@ describe("formatDayLabel", () => {
   it("isSameDay", () => {
     expect(isSameDay(new Date(2026, 0, 1, 1).getTime(), new Date(2026, 0, 1, 23).getTime())).toBe(true);
     expect(isSameDay(new Date(2026, 0, 1, 23).getTime(), new Date(2026, 0, 2, 0).getTime())).toBe(false);
+  });
+});
+
+describe("movePinned", () => {
+  const c = (id: number, pinnedOrder?: number, pinned = pinnedOrder !== undefined) =>
+    ({ id, pinned, archived: false, pinnedOrder }) as unknown as ChatItem;
+  const order = (list: ReturnType<typeof c>[]) => pinnedInOrder(list).map((x) => x.id);
+
+  it("pastga va yuqoriga ko'chirish", () => {
+    const list = [c(1, 0), c(2, 1), c(3, 2), c(4)];
+    expect(order(movePinned(list, 1, 3))).toEqual([2, 3, 1]);
+    expect(order(movePinned(list, 3, 1))).toEqual([3, 1, 2]);
+  });
+
+  it("qadalmagan yoki bir xil — o'zgarmaydi", () => {
+    const list = [c(1, 0), c(2, 1), c(4)];
+    expect(movePinned(list, 4, 1)).toBe(list);
+    expect(movePinned(list, 1, 1)).toBe(list);
+  });
+
+  it("tartibsizlari oxirida, natijada 0..n", () => {
+    const list = [c(1, undefined, true), c(2, 0)];
+    expect(order(list)).toEqual([2, 1]);
+    expect(movePinned(list, 1, 2).map((x) => x.pinnedOrder)).toEqual([0, 1]);
   });
 });

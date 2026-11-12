@@ -76,11 +76,22 @@ export async function logOut(): Promise<void> {
 export async function loadChats(limit = 200): Promise<ChatItem[]> {
   const client = await getClient();
   const chats: ChatItem[] = [];
+  let pinnedIndex = 0;
   for await (const dialog of client.iterDialogs({ limit })) {
     rememberPeer(dialog.peer);
-    chats.push(toChatItem(dialog));
+    const chat = toChatItem(dialog);
+    // Telegram qadalganlarni foydalanuvchi tartibida birinchi qaytaradi
+    if (chat.pinned && !chat.archived) chat.pinnedOrder = pinnedIndex++;
+    chats.push(chat);
   }
   return chats;
+}
+
+/** Qadalgan chatlar tartibini saqlaydi (asosiy ro'yxat). */
+export async function reorderPinned(ids: number[]): Promise<void> {
+  const client = await getClient();
+  const order = await Promise.all(ids.map(async (id) => ({ _: "inputDialogPeer" as const, peer: await client.resolvePeer(id) })));
+  await client.call({ _: "messages.reorderPinnedDialogs", force: true, folderId: 0, order });
 }
 
 /** Telegram'dagi papka qoidalari (dialogFilter) — sodda ko'rinishda. */

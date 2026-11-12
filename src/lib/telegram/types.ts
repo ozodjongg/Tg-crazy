@@ -39,6 +39,8 @@ export interface ChatItem {
   isSelf: boolean;
   /** Saqlangan qoralama matni */
   draft: string;
+  /** Qadalganlar orasidagi joy (0 — eng tepada); qadalmaganlarda yo'q */
+  pinnedOrder?: number;
   /** Qidiruvdan ochilgan, ro'yxatda yo'q chat (faqat ochiq turganda ko'rinadi) */
   ephemeral?: boolean;
   /** A'zo bo'lmagan ommaviy kanal/guruh — yozish o'rnida "Qo'shilish" */

@@ -9,6 +9,7 @@ import { forgetChatMedia } from "@/lib/telegram/media";
 import { itemPreview, type ChatItem, type ChatKind, type Me, type MessageItem } from "@/lib/telegram/types";
 import { toMarkdown } from "@/lib/markdown";
 import { formatScheduleLabel } from "@/lib/format";
+import { movePinned, pinnedInOrder } from "@/lib/chats";
 import { usePrefs } from "./prefs";
 import { prependOlder, removeMessages, replaceMessage, toggleReaction, upsertMessage } from "@/lib/messages";
 
@@ -119,6 +120,8 @@ interface AppState {
   notifyTyping: () => void;
   /** Chat amallari (kontekst menyudan); muvaffaqiyatsiz bo'lsa holat qaytariladi. */
   chatAction: (chatId: number, action: ChatAction) => Promise<void>;
+  /** Qadalgan chatni boshqasining joyiga sudrab qo'yish */
+  movePinned: (fromId: number, toId: number) => Promise<void>;
   votePoll: (msg: MessageItem, answers: string[]) => Promise<void>;
   pressButton: (msg: MessageItem, data: string) => Promise<void>;
   showNotice: (text: string | null) => void;
@@ -138,7 +141,11 @@ const TYPING_THROTTLE = 4000;
 
 export function sortChats(chats: ChatItem[]): ChatItem[] {
   return [...chats].sort(
-    (a, b) => Number(b.pinned) - Number(a.pinned) || (b.lastDate ?? 0) - (a.lastDate ?? 0),
+    (a, b) =>
+      Number(b.pinned) - Number(a.pinned) ||
+      // Qadalganlar foydalanuvchi tartibida, qolganlari oxirgi xabar vaqti bo'yicha
+      (a.pinned && b.pinned ? (a.pinnedOrder ?? Infinity) - (b.pinnedOrder ?? Infinity) : 0) ||
+      (b.lastDate ?? 0) - (a.lastDate ?? 0),
   );
 }
 
@@ -736,8 +743,9 @@ export const useApp = create<AppState>((set, get) => {
         set({ chats: sortChats(get().chats.map((c) => (c.id === chatId ? { ...c, ...p } : c))) });
       // Darhol ko'rsatamiz, server javobini kutmaymiz
       switch (action) {
-        case "pin": patch({ pinned: true }); break;
-        case "unpin": patch({ pinned: false }); break;
+        // Yangi qadalgan chat eng tepaga chiqadi (Telegram'dagidek)
+        case "pin": patch({ pinned: true, pinnedOrder: Math.min(0, ...before.map((c) => c.pinnedOrder ?? 0)) - 1 }); break;
+        case "unpin": patch({ pinned: false, pinnedOrder: undefined }); break;
         case "mute": patch({ muted: true }); break;
         case "unmute": patch({ muted: false }); break;
         case "archive": patch({ archived: true, pinned: false }); break;
@@ -777,6 +785,20 @@ export const useApp = create<AppState>((set, get) => {
         }
       } catch (err) {
         set({ chats: before, error: errorText(err) });
+      }
+    },
+
+    async movePinned(fromId, toId) {
+      const before = get().chats;
+      const moved = movePinned(before, fromId, toId);
+      if (moved === before) return;
+      const next = sortChats(moved);
+      set({ chats: next });
+      try {
+        await tg.reorderPinned(pinnedInOrder(next).map((c) => c.id));
+      } catch (err) {
+        set({ chats: before });
+        fail(err);
       }
     },
 

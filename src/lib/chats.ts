@@ -65,3 +65,24 @@ export function filterChats(chats: ChatItem[], folder: Folder, query: string): C
 export function unreadChats(chats: ChatItem[], folder: Folder): number {
   return chats.filter((c) => folder.match(c) && c.unread > 0 && !c.muted).length;
 }
+
+/** Qadalgan chatlar tartib bo'yicha (tartibi noma'lumlari oxirida). */
+export function pinnedInOrder(chats: ChatItem[]): ChatItem[] {
+  return chats
+    .filter((c) => c.pinned && !c.archived)
+    .sort((a, b) => (a.pinnedOrder ?? Infinity) - (b.pinnedOrder ?? Infinity));
+}
+
+/**
+ * Qadalgan chatni boshqasining joyiga ko'chiradi; pinnedOrder 0..n qayta raqamlanadi.
+ * Qadalmagan yoki bir xil ID bo'lsa o'zgarishsiz qaytadi.
+ */
+export function movePinned(chats: ChatItem[], fromId: number, toId: number): ChatItem[] {
+  const order = pinnedInOrder(chats).map((c) => c.id);
+  const from = order.indexOf(fromId);
+  const to = order.indexOf(toId);
+  if (from < 0 || to < 0 || from === to) return chats;
+  order.splice(to, 0, ...order.splice(from, 1));
+  const index = new Map(order.map((id, i) => [id, i]));
+  return chats.map((c) => (index.has(c.id) ? { ...c, pinnedOrder: index.get(c.id) } : c));
+}

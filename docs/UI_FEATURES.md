@@ -38,7 +38,7 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Kontekst menyu: qadash, ovozsiz qilish, o'qilgan/o'qilmagan, arxivlash, o'chirish | ✅ |
 | Arxiv qatori va arxiv ko'rinishi | ✅ |
 | Bir nechta chatni tanlash: o'qilgan, ovozsiz, arxiv, o'chirish/tark etish | ✅ |
-| Sudrab tartiblash (qadalganlar) | ⬜ |
+| Qadalganlarni sudrab tartiblash (va menyuda Yuqoriga/Pastga), Telegram bilan sinxron | ✅ |
 
 ## V3 — Suhbat oynasi
 

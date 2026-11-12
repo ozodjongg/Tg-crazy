@@ -15,7 +15,7 @@ import { SideMenu } from "./SideMenu";
 export const chatTitle = (c: ChatItem) => (c.isSelf ? "Saqlangan xabarlar" : c.title);
 
 function ChatRow({
-  chat, active: activeProp, typing, onOpen, onMenu, selected,
+  chat, active: activeProp, typing, onOpen, onMenu, selected, drag,
 }: {
   chat: ChatItem;
   active: boolean;
@@ -24,6 +24,15 @@ function ChatRow({
   onMenu: (x: number, y: number) => void;
   /** Ko'p tanlash rejimi: undefined — o'chiq */
   selected?: boolean;
+  /** Sudrab tartiblash (faqat qadalganlar, "Hammasi" papkasida) */
+  drag?: {
+    onStart: () => void;
+    onOver: () => void;
+    onDrop: () => void;
+    onEnd: () => void;
+    /** Ustiga tashlanadigan joy ko'rsatkichi */
+    target: boolean;
+  };
 }) {
   const selecting = selected !== undefined;
   // Tanlash rejimida ochiq chat ajratib ko'rsatilmaydi
@@ -58,7 +67,25 @@ function ChatRow({
   }
 
   return (
-    <li>
+    <li
+      draggable={!!drag}
+      className={drag?.target ? "rounded-xl outline-2 -outline-offset-2 outline-dashed outline-accent" : undefined}
+      onDragStart={drag ? (e) => {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", String(chat.id));
+        drag.onStart();
+      } : undefined}
+      onDragOver={drag ? (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        drag.onOver();
+      } : undefined}
+      onDrop={drag ? (e) => {
+        e.preventDefault();
+        drag.onDrop();
+      } : undefined}
+      onDragEnd={drag?.onEnd}
+    >
       <button
         aria-current={active || undefined}
         aria-pressed={selecting ? selected : undefined}
@@ -116,8 +143,17 @@ function ChatRow({
   );
 }
 
-function chatActions(chat: ChatItem, run: (a: ChatAction) => void, askDelete: () => void, select: () => void): MenuAction[] {
+function chatActions(
+  chat: ChatItem,
+  run: (a: ChatAction) => void,
+  askDelete: () => void,
+  select: () => void,
+  move?: { up?: () => void; down?: () => void },
+): MenuAction[] {
   const list: MenuAction[] = [{ key: "select", label: "Tanlash", icon: "checkCircle", run: select }];
+  // Qadalganlar tartibini klaviatura/menyu orqali ham o'zgartirish mumkin
+  if (move?.up) list.push({ key: "up", label: "Yuqoriga", icon: "up", run: move.up });
+  if (move?.down) list.push({ key: "down", label: "Pastga", icon: "down", run: move.down });
   if (!chat.archived) {
     list.push(chat.pinned
       ? { key: "unpin", label: "Qadashni olib tashlash", icon: "pin", run: () => run("unpin") }
@@ -364,6 +400,8 @@ export function ChatList() {
   const [deleting, setDeleting] = useState<ChatItem | null>(null);
   const [selection, setSelection] = useState<ReadonlySet<number> | null>(null);
   const [deletingMany, setDeletingMany] = useState(false);
+  const movePinnedChat = useApp((s) => s.movePinned);
+  const [dragging, setDragging] = useState<{ from: number; over: number | null } | null>(null);
   const toggle = (id: number) =>
     setSelection((sel) => {
       const next = new Set(sel ?? []);
@@ -387,6 +425,9 @@ export function ChatList() {
     [archive, archived, chats, folder, query],
   );
   const archiveUnread = archived.filter((c) => c.unread > 0 || c.markedUnread).length;
+  // Qadalganlar tartibi faqat asosiy ro'yxatda (papkalarda o'z tartibi bor)
+  const canReorder = !archive && !query.trim() && folder.key === "all" && !selection;
+  const pinnedIds = canReorder ? visible.filter((c) => c.pinned).map((c) => c.id) : [];
   const showArchiveRow = !archive && !query && folder.key === "all" && archived.length > 0;
 
   return (
@@ -487,6 +528,20 @@ export function ChatList() {
             onOpen={() => (selection ? toggle(chat.id) : void openChat(chat.id))}
             onMenu={(x, y) => setRowMenu({ chat, x, y })}
             selected={selection ? selection.has(chat.id) : undefined}
+            drag={
+              canReorder && chat.pinned
+                ? {
+                    target: dragging !== null && dragging.over === chat.id && dragging.from !== chat.id,
+                    onStart: () => setDragging({ from: chat.id, over: null }),
+                    onOver: () => setDragging((d) => (d && d.over !== chat.id ? { ...d, over: chat.id } : d)),
+                    onDrop: () => {
+                      if (dragging) void movePinnedChat(dragging.from, chat.id);
+                      setDragging(null);
+                    },
+                    onEnd: () => setDragging(null),
+                  }
+                : undefined
+            }
           />
         ))}
         {visible.length === 0 && !query.trim() && (
@@ -512,6 +567,15 @@ export function ChatList() {
             (a) => void chatAction(rowMenu.chat.id, a),
             () => setDeleting(rowMenu.chat),
             () => toggle(rowMenu.chat.id),
+            (() => {
+              const i = pinnedIds.indexOf(rowMenu.chat.id);
+              if (i < 0) return undefined;
+              const id = rowMenu.chat.id;
+              return {
+                up: i > 0 ? () => void movePinnedChat(id, pinnedIds[i - 1]) : undefined,
+                down: i < pinnedIds.length - 1 ? () => void movePinnedChat(id, pinnedIds[i + 1]) : undefined,
+              };
+            })(),
           )}
           onClose={() => setRowMenu(null)}
         />
