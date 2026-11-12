@@ -1,15 +1,20 @@
 // Yozish maydonidagi oddiy belgilashni Telegram formatiga o'giradi:
 //   **qalin**  __kursiv__  ~~o'chirilgan~~  ||spoiler||  `kod`  ```til\nkod bloki```
+//   [Ism](tg://user?id=123) — username'siz foydalanuvchini eslatish
 // Juftsiz belgi matnda o'zgarishsiz qoladi. Ofsetlar UTF-16 da (JS satri bilan bir xil).
 
-export type MdEntityType = "bold" | "italic" | "strike" | "spoiler" | "code" | "pre";
+export type MdEntityType = "bold" | "italic" | "strike" | "spoiler" | "code" | "pre" | "mention_name";
 
 export interface MdEntity {
   type: MdEntityType;
   offset: number;
   length: number;
   language?: string;
+  /** mention_name uchun */
+  userId?: number;
 }
+
+const MENTION_RE = /^\[([^\[\]\n]+)\]\(tg:\/\/user\?id=(\d{1,20})\)/;
 
 const PAIRS: [string, MdEntityType][] = [
   ["**", "bold"],
@@ -56,6 +61,16 @@ export function parseMarkdown(input: string): { text: string; entities: MdEntity
         continue;
       }
     }
+    // Ism bilan eslatish
+    if (input[i] === "[") {
+      const m = MENTION_RE.exec(input.slice(i));
+      if (m) {
+        entities.push({ type: "mention_name", offset: out.length, length: m[1].length, userId: Number(m[2]) });
+        out += m[1];
+        i += m[0].length;
+        continue;
+      }
+    }
     const pair = PAIRS.find(([m]) => input.startsWith(m, i));
     if (pair) {
       const [marker, type] = pair;
@@ -81,9 +96,12 @@ export function parseMarkdown(input: string): { text: string; entities: MdEntity
   return { text: out, entities: entities.sort((a, b) => a.offset - b.offset || b.length - a.length) };
 }
 
-/** Telegram TL formatidagi entity'lar (sendText / editMessage uchun). */
+/**
+ * Telegram TL formatidagi entity'lar (sendText / editMessage uchun).
+ * mention_name bu yerda tashlab ketiladi — u foydalanuvchini resolve qilishni talab qiladi (api.ts).
+ */
 export function toTlEntities(entities: MdEntity[]) {
-  return entities.map((e) => {
+  return entities.filter((e) => e.type !== "mention_name").map((e) => {
     switch (e.type) {
       case "bold":
         return { _: "messageEntityBold" as const, offset: e.offset, length: e.length };
@@ -96,6 +114,7 @@ export function toTlEntities(entities: MdEntity[]) {
       case "code":
         return { _: "messageEntityCode" as const, offset: e.offset, length: e.length };
       case "pre":
+      default:
         return { _: "messageEntityPre" as const, offset: e.offset, length: e.length, language: e.language ?? "" };
     }
   });
@@ -117,10 +136,18 @@ const MARKERS: Partial<Record<string, [string, string]>> = {
 };
 
 /** Teskari amal: formatlangan xabarni tahrirlash uchun belgilangan matnga aylantiradi. */
-export function toMarkdown(text: string, entities: { kind: string; offset: number; length: number; language?: string }[]): string {
+export function toMarkdown(
+  text: string,
+  entities: { kind: string; offset: number; length: number; language?: string; userId?: number }[],
+): string {
   const inserts: { at: number; s: string; order: number }[] = [];
   entities.forEach((e, idx) => {
-    const m = e.kind === "pre" ? ["```" + (e.language ?? "") + "\n", "\n```"] : MARKERS[e.kind];
+    const m =
+      e.kind === "pre"
+        ? ["```" + (e.language ?? "") + "\n", "\n```"]
+        : e.kind === "text_mention" && e.userId
+          ? ["[", `](tg://user?id=${e.userId})`]
+          : MARKERS[e.kind];
     if (!m) return;
     // Yopuvchilar ochuvchilardan oldin, ichkilari tashqilaridan oldin yopiladi
     inserts.push({ at: e.offset, s: m[0], order: idx });

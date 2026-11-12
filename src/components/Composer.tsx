@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { applyCompletion, findTrigger, type Trigger } from "@/lib/autocomplete";
 import { insertAt } from "@/lib/emoji";
 import { wrapSelection } from "@/lib/markdown";
 import { pickForAi } from "@/lib/messages";
+import * as tg from "@/lib/telegram/api";
 import { itemPreview } from "@/lib/telegram/types";
 import { toggleScript } from "@/lib/translit/uz";
 import { useApp } from "@/store/app";
@@ -12,6 +14,7 @@ import { AttachDialog } from "./AttachDialog";
 import { EmojiPanel } from "./EmojiPanel";
 import { Icon } from "./Icon";
 import { PopupMenu } from "./PopupMenu";
+import { Suggestions, type Suggestion } from "./Suggestions";
 
 const iconButton =
   "mb-0.5 flex h-9 shrink-0 items-center justify-center rounded-full px-2.5 text-muted hover:bg-hover hover:text-text disabled:opacity-40 disabled:hover:bg-transparent";
@@ -37,6 +40,75 @@ export function Composer() {
   const [sendMenu, setSendMenu] = useState<{ x: number; y: number } | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const chatId = useApp((s) => s.activeChatId);
+  const chatKind = useApp((s) => s.chats.find((c) => c.id === s.activeChatId)?.kind ?? null);
+
+  // Avtoto'ldirish: kursor joyi, topilgan belgi va takliflar
+  const [cursor, setCursor] = useState(0);
+  const [suggest, setSuggest] = useState<{ for: string; items: Suggestion[] }>({ for: "", items: [] });
+  const [active, setActive] = useState(0);
+  const [dismissed, setDismissed] = useState<string | null>(null);
+  const trigger = findTrigger(text, cursor);
+  const triggerKey = trigger ? `${trigger.kind}:${trigger.start}:${trigger.query}` : "";
+  const suggestions = trigger && dismissed !== triggerKey && suggest.for === triggerKey ? suggest.items : [];
+
+  useEffect(() => {
+    if (!trigger || chatId === null) return;
+    let alive = true;
+    const t: Trigger = trigger;
+    const done = (items: Suggestion[]) => {
+      if (!alive) return;
+      setSuggest({ for: triggerKey, items });
+      setActive(0);
+    };
+    // Tarmoq so'rovlari yozish to'xtagach yuboriladi
+    const timer = setTimeout(() => {
+      if (t.kind === "mention" && chatKind === "group") {
+        tg.searchMentions(chatId, t.query).then(
+          (list) =>
+            done(
+              list.slice(0, 20).map((m) => ({
+                key: String(m.id),
+                value: m.username ? `@${m.username}` : `[${m.name.replace(/[[\]]/g, "")}](tg://user?id=${m.id})`,
+                title: m.name,
+                subtitle: m.username ? `@${m.username}` : undefined,
+                peerId: m.id,
+              })),
+            ),
+          () => done([]),
+        );
+      } else if (t.kind === "command" && (chatKind === "bot" || chatKind === "group")) {
+        tg.loadBotCommands(chatId).then(
+          (list) =>
+            done(
+              list
+                .filter((c) => c.command.toLowerCase().startsWith(t.query.toLowerCase()))
+                .map((c) => ({ key: c.command, value: `/${c.command}`, title: `/${c.command}`, subtitle: c.description, glyph: "⌘" })),
+            ),
+          () => done([]),
+        );
+      } else {
+        done([]);
+      }
+    }, t.kind === "mention" && t.query ? 200 : 0);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+    // triggerKey trigger'ni to'liq ifodalaydi
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triggerKey, chatId, chatKind]);
+
+  function pickSuggestion(s: Suggestion) {
+    if (!trigger) return;
+    const next = applyCompletion(text, trigger, s.value);
+    setDraft(next.text);
+    setCursor(next.cursor);
+    requestAnimationFrame(() => {
+      ref.current?.focus();
+      ref.current?.setSelectionRange(next.cursor, next.cursor);
+    });
+  }
 
   // Matn tashqaridan o'zgarganda ham (tahrir, AI qoralamasi) balandlik moslashadi
   useEffect(() => {
@@ -86,6 +158,24 @@ export function Composer() {
   }
 
   function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    if (suggestions.length > 0) {
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const step = e.key === "ArrowDown" ? 1 : -1;
+        setActive((i) => (i + step + suggestions.length) % suggestions.length);
+        return;
+      }
+      if ((e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) || e.key === "Tab") {
+        e.preventDefault();
+        pickSuggestion(suggestions[Math.min(active, suggestions.length - 1)]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setDismissed(triggerKey);
+        return;
+      }
+    }
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === "b" || e.key === "i")) {
       if (wrap(e.key === "b" ? "**" : "__")) e.preventDefault();
       return;
@@ -137,6 +227,13 @@ export function Composer() {
             </button>
           </div>
         )}
+        <Suggestions
+          items={suggestions}
+          active={active}
+          label={trigger?.kind === "command" ? "Bot buyruqlari" : trigger?.kind === "emoji" ? "Emoji" : "Eslatish"}
+          onPick={pickSuggestion}
+          onHover={setActive}
+        />
         <div className="flex items-end gap-2">
           <div className="flex min-w-0 flex-1 items-end rounded-3xl border border-border bg-bg py-1 pl-1 pr-1 shadow-sm focus-within:border-accent">
             <input ref={fileRef} type="file" className="hidden" onChange={(e) => onFiles(e.target.files)} />
@@ -175,8 +272,10 @@ export function Composer() {
               placeholder={editing ? "Xabarni tahrirlang…" : "Xabar yozing…  (**qalin**, __kursiv__, `kod`)"}
               aria-label="Xabar matni"
               value={text}
+              onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
               onChange={(e) => {
                 setDraft(e.target.value);
+                setCursor(e.target.selectionStart);
                 if (e.target.value && !editing) notifyTyping();
               }}
               onKeyDown={onKeyDown}

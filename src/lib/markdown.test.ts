@@ -71,3 +71,23 @@ describe("toMarkdown", () => {
     expect(parseMarkdown(toMarkdown(parsed.text, kinds))).toEqual(parsed);
   });
 });
+
+describe("ism bilan eslatish", () => {
+  it("[Ism](tg://user?id=N) — mention_name", () => {
+    const r = parseMarkdown("salom [Ali Valiyev](tg://user?id=42)!");
+    expect(r.text).toBe("salom Ali Valiyev!");
+    expect(r.entities).toEqual([{ type: "mention_name", offset: 6, length: 11, userId: 42 }]);
+    // Sinxron TL o'giruvchi uni tashlab ketadi (resolve api.ts da)
+    expect(toTlEntities(r.entities)).toEqual([]);
+  });
+
+  it("oddiy kvadrat qavs o'zgarmaydi", () => {
+    expect(parseMarkdown("[eslatma](https://x.uz)").text).toBe("[eslatma](https://x.uz)");
+  });
+
+  it("toMarkdown teskari o'giradi", () => {
+    expect(toMarkdown("salom Ali!", [{ kind: "text_mention", offset: 6, length: 3, userId: 42 }])).toBe(
+      "salom [Ali](tg://user?id=42)!",
+    );
+  });
+});

@@ -1,4 +1,4 @@
-import type { Message, TelegramClient } from "@mtcute/web";
+import type { Message, TelegramClient, tl } from "@mtcute/web";
 import { parseMarkdown, toTlEntities } from "../markdown";
 import { getClient } from "./client";
 import { isRpcError } from "./errors";
@@ -282,19 +282,89 @@ export async function saveDraft(chatId: number, text: string): Promise<void> {
 }
 
 /** Belgilashli matn (**qalin** va h.k.) Telegram formatiga o'giriladi. */
-function formatted(source: string) {
+async function formatted(source: string) {
   const { text, entities } = parseMarkdown(source);
-  return { text, entities: toTlEntities(entities) };
+  const list: tl.TypeMessageEntity[] = toTlEntities(entities);
+  const mentions = entities.filter((e) => e.type === "mention_name" && e.userId);
+  if (mentions.length) {
+    const client = await getClient();
+    for (const e of mentions) {
+      try {
+        const userId = await client.resolveUser(e.userId!);
+        list.push({ _: "inputMessageEntityMentionName", offset: e.offset, length: e.length, userId });
+      } catch {
+        // Foydalanuvchi topilmasa ism oddiy matn bo'lib qoladi
+      }
+    }
+    list.sort((a, b) => a.offset - b.offset);
+  }
+  return { text, entities: list };
 }
 
 export async function sendText(chatId: number, text: string, replyTo?: number, silent = false): Promise<MessageItem> {
   const client = await getClient();
-  return item(await client.sendText(chatId, formatted(text), { replyTo, silent }));
+  return item(await client.sendText(chatId, await formatted(text), { replyTo, silent }));
 }
 
 export async function editText(chatId: number, messageId: number, text: string): Promise<MessageItem> {
   const client = await getClient();
-  return item(await client.editMessage({ chatId, message: messageId, text: formatted(text) }));
+  return item(await client.editMessage({ chatId, message: messageId, text: await formatted(text) }));
+}
+
+// ---- Avtoto'ldirish ----
+
+export interface MentionHit {
+  id: number;
+  name: string;
+  username: string | null;
+}
+
+/** Guruhda eslatish uchun a'zolarni ism yoki username bo'yicha qidiradi. */
+export async function searchMentions(chatId: number, query: string, limit = 20): Promise<MentionHit[]> {
+  if (chatId > 0) return [];
+  const client = await getClient();
+  const res = await client.getChatMembers(chatId, { query, limit, type: query ? "all" : "recent" });
+  const q = query.toLowerCase();
+  return res
+    .map((m) => {
+      rememberPeer(m.user);
+      return { id: m.user.id, name: peerTitle(m.user), username: m.user.username };
+    })
+    // Oddiy guruhlarda server query'ni hisobga olmaydi — mahalliy filtr
+    .filter((m) => !q || m.name.toLowerCase().includes(q) || (m.username ?? "").toLowerCase().includes(q));
+}
+
+export interface BotCommand {
+  command: string;
+  description: string;
+}
+
+const botCommandsCache = new Map<number, Promise<BotCommand[]>>();
+
+/** Chatdagi bot(lar) buyruqlari: bot bilan shaxsiy chat yoki guruhdagi botlar. */
+export function loadBotCommands(chatId: number): Promise<BotCommand[]> {
+  let p = botCommandsCache.get(chatId);
+  if (!p) {
+    p = (async () => {
+      const client = await getClient();
+      const lists: tl.TypeBotCommand[][] = [];
+      if (chatId > 0) {
+        const u = await client.getFullUser(chatId);
+        const info = u.full.botInfo;
+        if (info?.commands) lists.push(info.commands);
+      } else {
+        const c = await client.getFullChat(chatId);
+        c.botInfo.forEach((b) => lists.push(b.commands));
+      }
+      const seen = new Set<string>();
+      return lists.flat().filter((c) => !seen.has(c.command) && seen.add(c.command)).map((c) => ({
+        command: c.command, description: c.description,
+      }));
+    })();
+    botCommandsCache.set(chatId, p);
+    p.catch(() => botCommandsCache.delete(chatId));
+  }
+  return p;
 }
 
 // ---- Stikerlar ----
