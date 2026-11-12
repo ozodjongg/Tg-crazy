@@ -1,5 +1,6 @@
 import type { Message, TelegramClient, tl } from "@mtcute/web";
 import { parseMarkdown, toTlEntities } from "../markdown";
+import { buildRules, parseRules, type PrivacyState, type RawRule } from "../privacy";
 import { getClient } from "./client";
 import { isRpcError } from "./errors";
 import { rememberMedia, rememberPeer } from "./media";
@@ -332,6 +333,29 @@ export async function removeMyPhoto(): Promise<void> {
   const [current] = await client.getProfilePhotos("me", { limit: 1 });
   if (current) await client.deleteProfilePhotos(current.fileId);
   rememberPeer(await client.getUser("me"));
+}
+
+// ---- Maxfiylik ----
+
+/** tlKey — PRIVACY_KEYS dagi inputPrivacyKey* nomi */
+export async function loadPrivacy(tlKey: string): Promise<PrivacyState> {
+  const client = await getClient();
+  const res = await client.call({ _: "account.getPrivacy", key: { _: tlKey } as tl.TypeInputPrivacyKey });
+  return parseRules(res.rules as unknown as RawRule[]);
+}
+
+export async function savePrivacy(tlKey: string, state: PrivacyState): Promise<void> {
+  const client = await getClient();
+  const rules = await Promise.all(
+    buildRules(state).map(async (r) =>
+      r.users ? { _: r._, users: await Promise.all(r.users.map((id) => client.resolveUser(id))) } : r,
+    ),
+  );
+  await client.call({
+    _: "account.setPrivacy",
+    key: { _: tlKey } as tl.TypeInputPrivacyKey,
+    rules: rules as unknown as tl.TypeInputPrivacyRule[],
+  });
 }
 
 // ---- Kontaktlar va yangi chatlar ----

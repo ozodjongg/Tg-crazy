@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { TEXT_SIZES, usePrefs, type TextSize, type Wallpaper } from "@/store/prefs";
 import { Dialog } from "./Dialog";
+import { Icon } from "./Icon";
+import { PrivacyDialog } from "./PrivacyDialog";
 
 const SIZES: { id: TextSize; label: string }[] = [
   { id: "sm", label: "Kichik" },
@@ -25,6 +27,7 @@ function notificationState(): NotificationPermission | "unsupported" {
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const prefs = usePrefs();
   const [permission, setPermission] = useState(notificationState);
+  const [page, setPage] = useState<"main" | "privacy">("main");
 
   async function toggleNotifications(on: boolean) {
     if (on && permission === "default") {
@@ -36,6 +39,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   }
 
   const enabled = prefs.notifications && permission === "granted";
+
+  if (page === "privacy") return <PrivacyDialog onBack={() => setPage("main")} onClose={onClose} />;
 
   return (
     <Dialog title="Sozlamalar" onClose={onClose}>
@@ -102,6 +107,17 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             onChange={(e) => void toggleNotifications(e.target.checked)}
           />
         </label>
+      </section>
+
+      <section className="mt-5">
+        <h3 className="mb-2 text-sm font-medium text-muted">Maxfiylik va xavfsizlik</h3>
+        <div className="overflow-hidden rounded-xl bg-panel">
+          <button className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-hover" onClick={() => setPage("privacy")}>
+            <Icon name="eye" size={18} className="text-muted" />
+            <span className="flex-1">Maxfiylik</span>
+            <span className="text-muted" aria-hidden>›</span>
+          </button>
+        </div>
       </section>
     </Dialog>
   );

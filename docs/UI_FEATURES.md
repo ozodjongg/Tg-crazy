@@ -81,7 +81,7 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Rasm ko'rgichda galereya (oldingi/keyingi), saqlash | ✅ |
 | Kontaktlar (qidiruv, onlayn holati), yangi shaxsiy chat, guruh (a'zolar bilan) va kanal yaratish | ✅ |
 | Profilni tahrirlash: rasm, ism, familiya, bio, username (jonli tekshiruv) | ✅ |
-| Maxfiylik sozlamalari | ⬜ |
+| Maxfiylik: telefon, oxirgi faollik, rasm, bio, uzatish, qo'ng'iroqlar, guruhga qo'shish (istisnolar saqlanadi) | ✅ |
 | Faol seanslar | ⬜ |
 | Ko'p akkaunt | ⬜ |
 
