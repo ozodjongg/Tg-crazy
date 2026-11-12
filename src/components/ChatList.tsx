@@ -15,8 +15,19 @@ import { SideMenu } from "./SideMenu";
 export const chatTitle = (c: ChatItem) => (c.isSelf ? "Saqlangan xabarlar" : c.title);
 
 function ChatRow({
-  chat, active, typing, onOpen, onMenu,
-}: { chat: ChatItem; active: boolean; typing: boolean; onOpen: () => void; onMenu: (x: number, y: number) => void }) {
+  chat, active: activeProp, typing, onOpen, onMenu, selected,
+}: {
+  chat: ChatItem;
+  active: boolean;
+  typing: boolean;
+  onOpen: () => void;
+  onMenu: (x: number, y: number) => void;
+  /** Ko'p tanlash rejimi: undefined — o'chiq */
+  selected?: boolean;
+}) {
+  const selecting = selected !== undefined;
+  // Tanlash rejimida ochiq chat ajratib ko'rsatilmaydi
+  const active = activeProp && !selecting;
   const sub = active ? "text-accent-text/80" : "text-muted";
   const prefix = chat.lastOutgoing
     ? "Siz: "
@@ -50,8 +61,9 @@ function ChatRow({
     <li>
       <button
         aria-current={active || undefined}
+        aria-pressed={selecting ? selected : undefined}
         className={`flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left ${
-          active ? "bg-accent text-accent-text" : "hover:bg-hover"
+          active ? "bg-accent text-accent-text" : selected ? "bg-accent-soft" : "hover:bg-hover"
         }`}
         onClick={onOpen}
         onContextMenu={(e) => {
@@ -59,7 +71,19 @@ function ChatRow({
           onMenu(e.clientX, e.clientY);
         }}
       >
-        <Avatar id={chat.id} title={chat.title} saved={chat.isSelf} online={chat.presence === "online"} />
+        <span className="relative shrink-0">
+          <Avatar id={chat.id} title={chat.title} saved={chat.isSelf} online={chat.presence === "online" && !selecting} />
+          {selecting && (
+            <span
+              className={`absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-bg ${
+                selected ? "bg-accent text-accent-text" : "bg-panel"
+              }`}
+              aria-hidden
+            >
+              {selected && <Icon name="check" size={12} />}
+            </span>
+          )}
+        </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">
             <span className="min-w-0 truncate font-medium">{chatTitle(chat)}</span>
@@ -92,8 +116,8 @@ function ChatRow({
   );
 }
 
-function chatActions(chat: ChatItem, run: (a: ChatAction) => void, askDelete: () => void): MenuAction[] {
-  const list: MenuAction[] = [];
+function chatActions(chat: ChatItem, run: (a: ChatAction) => void, askDelete: () => void, select: () => void): MenuAction[] {
+  const list: MenuAction[] = [{ key: "select", label: "Tanlash", icon: "checkCircle", run: select }];
   if (!chat.archived) {
     list.push(chat.pinned
       ? { key: "unpin", label: "Qadashni olib tashlash", icon: "pin", run: () => run("unpin") }
@@ -151,6 +175,75 @@ function DeleteChatDialog({ chat, onClose }: { chat: ChatItem; onClose: () => vo
         </button>
       </div>
     </Dialog>
+  );
+}
+
+function DeleteChatsDialog({ chats, onDone, onClose }: { chats: ChatItem[]; onDone: () => void; onClose: () => void }) {
+  const chatAction = useApp((s) => s.chatAction);
+  const [busy, setBusy] = useState(false);
+  const leaves = chats.filter((c) => c.kind === "group" || c.kind === "channel").length;
+  const deletes = chats.length - leaves;
+  const go = async () => {
+    setBusy(true);
+    // Ketma-ket: Telegram bir vaqtdagi ko'p so'rovni cheklashi mumkin
+    for (const c of chats) await chatAction(c.id, "delete").catch(() => {});
+    onDone();
+    onClose();
+  };
+  return (
+    <Dialog title={`${chats.length} ta chat`} onClose={onClose}>
+      <p className="text-muted">
+        {[deletes ? `${deletes} ta chat sizda o'chiriladi` : "", leaves ? `${leaves} ta guruh/kanal tark etiladi` : ""]
+          .filter(Boolean)
+          .join(", ")}
+        . Bu amalni qaytarib bo&apos;lmaydi.
+      </p>
+      <div className="mt-5 flex justify-end gap-2">
+        <button className={secondaryButton} onClick={onClose} disabled={busy}>
+          Bekor qilish
+        </button>
+        <button className={`${primaryButton} bg-danger hover:bg-danger`} disabled={busy} onClick={() => void go()}>
+          {busy ? "Bajarilmoqda…" : "O'chirish"}
+        </button>
+      </div>
+    </Dialog>
+  );
+}
+
+/** Tanlangan chatlar uchun amallar paneli. */
+function ChatSelectionBar({
+  chats, onCancel, onDelete,
+}: { chats: ChatItem[]; onCancel: () => void; onDelete: () => void }) {
+  const chatAction = useApp((s) => s.chatAction);
+  const allMuted = chats.length > 0 && chats.every((c) => c.muted || c.isSelf);
+  const allArchived = chats.length > 0 && chats.every((c) => c.archived);
+  const anyUnread = chats.some((c) => c.unread > 0 || c.markedUnread);
+  const run = (a: ChatAction, filter: (c: ChatItem) => boolean = () => true) => {
+    for (const c of chats.filter(filter)) void chatAction(c.id, a).catch(() => {});
+    onCancel();
+  };
+  const btn = "flex h-9 w-9 items-center justify-center rounded-full hover:bg-hover disabled:opacity-40";
+  return (
+    <div className="flex items-center gap-1 border-b border-border bg-bg px-2 py-1.5" role="toolbar" aria-label="Tanlangan chatlar">
+      <button className={`${btn} text-muted`} aria-label="Tanlashni bekor qilish" onClick={onCancel}>
+        <Icon name="close" size={18} />
+      </button>
+      <span className="flex-1 text-sm font-medium" aria-live="polite">
+        {chats.length} ta tanlandi
+      </span>
+      <button className={btn} title={anyUnread ? "O'qilgan deb belgilash" : "O'qilmagan deb belgilash"} aria-label={anyUnread ? "O'qilgan deb belgilash" : "O'qilmagan deb belgilash"} disabled={!chats.length} onClick={() => run(anyUnread ? "read" : "unread")}>
+        <Icon name={anyUnread ? "checks" : "mark"} size={18} />
+      </button>
+      <button className={btn} title={allMuted ? "Ovozni yoqish" : "Ovozsiz qilish"} aria-label={allMuted ? "Ovozni yoqish" : "Ovozsiz qilish"} disabled={!chats.length} onClick={() => run(allMuted ? "unmute" : "mute", (c) => !c.isSelf)}>
+        <Icon name="mute" size={18} />
+      </button>
+      <button className={btn} title={allArchived ? "Arxivdan chiqarish" : "Arxivlash"} aria-label={allArchived ? "Arxivdan chiqarish" : "Arxivlash"} disabled={!chats.length} onClick={() => run(allArchived ? "unarchive" : "archive", (c) => !c.isSelf)}>
+        <Icon name="archive" size={18} />
+      </button>
+      <button className={`${btn} text-danger`} title="O'chirish" aria-label="O'chirish" disabled={!chats.length} onClick={onDelete}>
+        <Icon name="trash" size={18} />
+      </button>
+    </div>
   );
 }
 
@@ -269,6 +362,21 @@ export function ChatList() {
   const [archive, setArchive] = useState(false);
   const [rowMenu, setRowMenu] = useState<{ chat: ChatItem; x: number; y: number } | null>(null);
   const [deleting, setDeleting] = useState<ChatItem | null>(null);
+  const [selection, setSelection] = useState<ReadonlySet<number> | null>(null);
+  const [deletingMany, setDeletingMany] = useState(false);
+  const toggle = (id: number) =>
+    setSelection((sel) => {
+      const next = new Set(sel ?? []);
+      if (!next.delete(id)) next.add(id);
+      return next.size ? next : null;
+    });
+
+  useEffect(() => {
+    if (!selection) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !deletingMany && setSelection(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selection, deletingMany]);
 
   const folders = useMemo(() => buildFolders(rules), [rules]);
   // Tanlangan papka Telegram'da o'chirilgan bo'lsa — "Hammasi"
@@ -345,6 +453,13 @@ export function ChatList() {
         </nav>
       )}
 
+      {selection && (
+        <ChatSelectionBar
+          chats={allChats.filter((c) => selection.has(c.id))}
+          onCancel={() => setSelection(null)}
+          onDelete={() => setDeletingMany(true)}
+        />
+      )}
       <ul className="thin-scroll flex-1 space-y-0.5 overflow-y-auto p-2">
         {showArchiveRow && (
           <li>
@@ -369,8 +484,9 @@ export function ChatList() {
             chat={chat}
             active={chat.id === activeChatId}
             typing={chat.id in typing}
-            onOpen={() => void openChat(chat.id)}
+            onOpen={() => (selection ? toggle(chat.id) : void openChat(chat.id))}
             onMenu={(x, y) => setRowMenu({ chat, x, y })}
+            selected={selection ? selection.has(chat.id) : undefined}
           />
         ))}
         {visible.length === 0 && !query.trim() && (
@@ -391,11 +507,23 @@ export function ChatList() {
           x={rowMenu.x}
           y={rowMenu.y}
           label="Chat amallari"
-          actions={chatActions(rowMenu.chat, (a) => void chatAction(rowMenu.chat.id, a), () => setDeleting(rowMenu.chat))}
+          actions={chatActions(
+            rowMenu.chat,
+            (a) => void chatAction(rowMenu.chat.id, a),
+            () => setDeleting(rowMenu.chat),
+            () => toggle(rowMenu.chat.id),
+          )}
           onClose={() => setRowMenu(null)}
         />
       )}
       {deleting && <DeleteChatDialog chat={deleting} onClose={() => setDeleting(null)} />}
+      {deletingMany && selection && (
+        <DeleteChatsDialog
+          chats={allChats.filter((c) => selection.has(c.id))}
+          onDone={() => setSelection(null)}
+          onClose={() => setDeletingMany(false)}
+        />
+      )}
     </div>
   );
 }
