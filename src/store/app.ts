@@ -84,6 +84,9 @@ interface AppState {
   loadOlder: () => Promise<void>;
   loadNewer: () => Promise<void>;
   jumpTo: (messageId: number) => Promise<void>;
+  /** Qidiruvdan topilgan (ro'yxatda bo'lmasligi mumkin) chatni ochadi. */
+  openPeer: (hit: tg.PeerHit) => Promise<void>;
+  joinChat: (chatId: number) => Promise<void>;
   /** Chatni ochib, berilgan xabarga o'tadi (global qidiruvdan). */
   openChatAt: (chatId: number, messageId: number) => Promise<void>;
   clearJump: () => void;
@@ -426,6 +429,29 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     clearJump: () => set({ jumpTarget: null }),
+
+    async openPeer(hit) {
+      if (!get().chats.some((c) => c.id === hit.id)) {
+        const temp: ChatItem = {
+          id: hit.id, title: hit.title, kind: hit.kind, lastText: "", lastId: 0, lastDate: null, lastOutgoing: false,
+          lastSender: "", readOutboxMaxId: 0, readInboxMaxId: 0, unread: 0, mentions: 0, markedUnread: false,
+          pinned: false, muted: false, archived: false, isContact: hit.isContact, presence: hit.presence,
+          verified: hit.verified, isSelf: hit.id === get().me?.id, draft: "", ephemeral: true, joinable: !hit.isMember,
+        };
+        // Avval ochilgan vaqtinchalik chatlar olib tashlanadi
+        set({ chats: [...get().chats.filter((c) => !c.ephemeral), temp] });
+      }
+      await get().openChat(hit.id);
+    },
+
+    async joinChat(chatId) {
+      try {
+        await tg.joinChat(chatId);
+        set({ chats: sortChats(get().chats.map((c) => (c.id === chatId ? { ...c, joinable: false, ephemeral: false } : c))) });
+      } catch (err) {
+        fail(err);
+      }
+    },
 
     async openChatAt(chatId, messageId) {
       await get().openChat(chatId);

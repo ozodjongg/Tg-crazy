@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { buildFolders, filterChats, unreadChats } from "@/lib/chats";
 import { formatChatDate } from "@/lib/format";
-import { searchGlobal, type GlobalHit } from "@/lib/telegram/api";
+import { searchGlobal, searchPublic, type GlobalHit, type PeerHit } from "@/lib/telegram/api";
 import { itemPreview, type ChatItem } from "@/lib/telegram/types";
 import { useApp, type ChatAction } from "@/store/app";
 import { Avatar } from "./Avatar";
@@ -154,6 +154,58 @@ function DeleteChatDialog({ chat, onClose }: { chat: ChatItem; onClose: () => vo
   );
 }
 
+function formatMembers(hit: PeerHit): string {
+  if (hit.kind === "user" || hit.kind === "bot") return hit.username ? `@${hit.username}` : hit.kind === "bot" ? "bot" : "";
+  const n = hit.members;
+  const count = n === null ? "" : n >= 1000 ? `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}K` : String(n);
+  const noun = hit.kind === "channel" ? "obunachi" : "a'zo";
+  return [hit.username ? `@${hit.username}` : "", count ? `${count} ${noun}` : ""].filter(Boolean).join(" · ");
+}
+
+/** Qidiruvda: ro'yxatda yo'q kontaktlar va ommaviy kanal/guruh/foydalanuvchilar. */
+function PeerHits({ query, exclude }: { query: string; exclude: ReadonlySet<number> }) {
+  const openPeer = useApp((s) => s.openPeer);
+  const [hits, setHits] = useState<PeerHit[] | null>(null);
+  const q = query.trim().replace(/^@/, "");
+
+  useEffect(() => {
+    if (q.length < 2) return;
+    let alive = true;
+    const timer = setTimeout(() => {
+      searchPublic(q).then(
+        (h) => alive && setHits(h),
+        () => alive && setHits([]),
+      );
+    }, 350);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
+  }, [q]);
+
+  const shown = hits?.filter((h) => !exclude.has(h.id)) ?? [];
+  if (q.length < 2 || shown.length === 0) return null;
+  return (
+    <>
+      <li className="px-2.5 pb-1 pt-3 text-xs font-medium text-muted">Global qidiruv</li>
+      {shown.map((h) => (
+        <li key={h.id}>
+          <button className="flex w-full items-center gap-3 rounded-xl px-2.5 py-2 text-left hover:bg-hover" onClick={() => void openPeer(h)}>
+            <Avatar id={h.id} title={h.title} size={42} />
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center gap-1">
+                <span className="truncate font-medium">{h.title}</span>
+                {h.verified && <Icon name="verified" size={15} className="shrink-0 text-accent" />}
+              </span>
+              <span className="block truncate text-sm text-muted">{formatMembers(h)}</span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </>
+  );
+}
+
 /** Qidiruvda: barcha chatlardagi xabarlar (Telegram serveridan). */
 function MessageHits({ query }: { query: string }) {
   const openChatAt = useApp((s) => s.openChatAt);
@@ -202,8 +254,10 @@ function MessageHits({ query }: { query: string }) {
 }
 
 export function ChatList() {
-  const chats = useApp((s) => s.chats);
+  const allChats = useApp((s) => s.chats);
   const activeChatId = useApp((s) => s.activeChatId);
+  // Qidiruvdan ochilgan (a'zo bo'lmagan) chat faqat ochiq turganda ko'rinadi
+  const chats = useMemo(() => allChats.filter((c) => !c.ephemeral || c.id === activeChatId), [allChats, activeChatId]);
   const openChat = useApp((s) => s.openChat);
   const chatAction = useApp((s) => s.chatAction);
   const typing = useApp((s) => s.typing);
@@ -325,6 +379,7 @@ export function ChatList() {
           </li>
         )}
         {query.trim() && visible.length === 0 && <li className="px-2.5 py-2 text-sm text-muted">Chat topilmadi</li>}
+        {query.trim() && <PeerHits key={`p:${query.trim()}`} query={query} exclude={new Set(visible.map((c) => c.id))} />}
         {query.trim() && <MessageHits key={query.trim()} query={query} />}
       </ul>
 

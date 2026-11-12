@@ -39,6 +39,10 @@ export interface ChatItem {
   isSelf: boolean;
   /** Saqlangan qoralama matni */
   draft: string;
+  /** Qidiruvdan ochilgan, ro'yxatda yo'q chat (faqat ochiq turganda ko'rinadi) */
+  ephemeral?: boolean;
+  /** A'zo bo'lmagan ommaviy kanal/guruh — yozish o'rnida "Qo'shilish" */
+  joinable?: boolean;
 }
 
 export type MediaKind = "photo" | "video" | "gif" | "round" | "voice" | "audio" | "sticker" | "file";

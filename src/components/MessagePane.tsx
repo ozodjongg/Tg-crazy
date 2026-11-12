@@ -119,6 +119,27 @@ function SelectionBar({
   );
 }
 
+/** A'zo bo'lmagan ommaviy kanal/guruh: yozish o'rnida qo'shilish tugmasi. */
+function JoinBar({ chatId, channel }: { chatId: number; channel: boolean }) {
+  const joinChat = useApp((s) => s.joinChat);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="mx-auto max-w-3xl px-3 pb-3 pt-1">
+      <button
+        className="h-12 w-full rounded-3xl border border-border bg-bg font-medium text-accent shadow-sm hover:bg-hover disabled:opacity-50"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          await joinChat(chatId).catch(() => {});
+          setBusy(false);
+        }}
+      >
+        {busy ? "Qo'shilmoqda…" : channel ? "Kanalga obuna bo'lish" : "Guruhga qo'shilish"}
+      </button>
+    </div>
+  );
+}
+
 const headerButton =
   "flex h-10 shrink-0 items-center justify-center rounded-full px-3 text-xs font-medium text-muted hover:bg-hover hover:text-text";
 
@@ -496,6 +517,8 @@ export function MessagePane() {
             onForward={() => setForwarding(selectedMsgs)}
             onDelete={() => setDeleting(selectedMsgs)}
           />
+        ) : chat?.joinable ? (
+          <JoinBar chatId={activeChatId} channel={kind === "channel"} />
         ) : (
           <Composer key={activeChatId} />
         )}

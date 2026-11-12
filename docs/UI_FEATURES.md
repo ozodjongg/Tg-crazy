@@ -75,7 +75,7 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Funksiya | Holat |
 |---|---|
 | Global qidiruv: chatlar va xabarlar | ✅ |
-| Ommaviy kanal/foydalanuvchilarni qidirish (@username) | ⬜ |
+| Global qidiruv: kontaktlar va ommaviy kanal/guruh/foydalanuvchilar (nom yoki @username), a'zo bo'lmasdan ko'rish va qo'shilish | ✅ |
 | Bildirishnomalar (brauzer), sarlavhada o'qilmaganlar soni | ✅ |
 | Sozlamalar: matn o'lchami, chat foni, bildirishnomalar | ✅ |
 | Rasm ko'rgichda galereya (oldingi/keyingi), saqlash | ✅ |

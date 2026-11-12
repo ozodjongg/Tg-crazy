@@ -238,6 +238,56 @@ export async function searchGlobal(query: string, limit = 40): Promise<GlobalHit
   });
 }
 
+export interface PeerHit {
+  id: number;
+  title: string;
+  username: string | null;
+  kind: ChatKind;
+  /** Kanal/guruh a'zolari soni (ma'lum bo'lsa) */
+  members: number | null;
+  verified: boolean;
+  /** Kanal yoki guruhga a'zomiz (foydalanuvchilar uchun doim true) */
+  isMember: boolean;
+  isContact: boolean;
+  presence: Presence;
+}
+
+/** Kontaktlar va ommaviy foydalanuvchi/kanal/guruhlarni nom yoki @username bo'yicha qidiradi. */
+export async function searchPublic(query: string, limit = 20): Promise<PeerHit[]> {
+  const client = await getClient();
+  const { PeersIndex, User, Chat } = await import("@mtcute/web");
+  const res = await client.call({ _: "contacts.search", q: query.replace(/^@/, ""), limit });
+  const peers = PeersIndex.from(res);
+  const seen = new Set<number>();
+  const out: PeerHit[] = [];
+  for (const p of [...res.myResults, ...res.results]) {
+    const raw = peers.get(p);
+    const peer = raw._ === "user" || raw._ === "userEmpty" ? new User(raw) : new Chat(raw);
+    if (seen.has(peer.id)) continue;
+    seen.add(peer.id);
+    rememberPeer(peer);
+    const isUser = peer.type === "user";
+    out.push({
+      id: peer.id,
+      title: peerTitle(peer),
+      username: peer.username,
+      kind: peerKind(peer),
+      members: isUser ? null : peer.membersCount,
+      verified: peer.isVerified,
+      isMember: isUser ? true : peer.isMember,
+      isContact: isUser && peer.isContact,
+      presence: peerPresence(peer),
+    });
+  }
+  return out;
+}
+
+/** Ommaviy kanal yoki guruhga qo'shilish. */
+export async function joinChat(chatId: number): Promise<void> {
+  const client = await getClient();
+  await client.joinChat(chatId);
+}
+
 export interface Profile {
   bio: string;
   username: string | null;
