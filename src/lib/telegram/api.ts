@@ -282,6 +282,56 @@ export async function searchPublic(query: string, limit = 20): Promise<PeerHit[]
   return out;
 }
 
+// ---- Kontaktlar va yangi chatlar ----
+
+export interface Contact {
+  id: number;
+  name: string;
+  username: string | null;
+  presence: Presence;
+}
+
+/** Kontaktlar: avval onlayn, keyin ism bo'yicha. */
+export async function loadContacts(): Promise<Contact[]> {
+  const client = await getClient();
+  const users = await client.getContacts();
+  const rank = (p: Presence) => (p === "online" ? 0 : p === "recently" ? 1 : 2);
+  return users
+    .filter((u) => !u.isDeleted)
+    .map((u) => {
+      rememberPeer(u);
+      return { id: u.id, name: peerTitle(u), username: u.username, presence: peerPresence(u) };
+    })
+    .sort((a, b) => rank(a.presence) - rank(b.presence) || a.name.localeCompare(b.name));
+}
+
+/**
+ * Yangi guruh (supergruppa) yaratadi va a'zolarni qo'shadi.
+ * failed — maxfiylik sozlamalari tufayli qo'shib bo'lmagan foydalanuvchilar soni.
+ */
+export async function createGroup(title: string, userIds: number[]): Promise<{ id: number; failed: number }> {
+  const client = await getClient();
+  const chat = await client.createSupergroup({ title });
+  rememberPeer(chat);
+  let failed = 0;
+  // Bittadan qo'shamiz: biri rad etsa qolganlari qo'shilaveradi
+  for (const id of userIds) {
+    try {
+      await client.addChatMembers(chat.id, id, {});
+    } catch {
+      failed++;
+    }
+  }
+  return { id: chat.id, failed };
+}
+
+export async function createChannel(title: string, description: string): Promise<number> {
+  const client = await getClient();
+  const chat = await client.createChannel({ title, description: description || undefined });
+  rememberPeer(chat);
+  return chat.id;
+}
+
 /** Ommaviy kanal yoki guruhga qo'shilish. */
 export async function joinChat(chatId: number): Promise<void> {
   const client = await getClient();

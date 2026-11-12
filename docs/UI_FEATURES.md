@@ -79,7 +79,7 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Bildirishnomalar (brauzer), sarlavhada o'qilmaganlar soni | ✅ |
 | Sozlamalar: matn o'lchami, chat foni, bildirishnomalar | ✅ |
 | Rasm ko'rgichda galereya (oldingi/keyingi), saqlash | ✅ |
-| Kontaktlar, yangi shaxsiy chat / guruh / kanal yaratish | ⬜ |
+| Kontaktlar (qidiruv, onlayn holati), yangi shaxsiy chat, guruh (a'zolar bilan) va kanal yaratish | ✅ |
 | Profilni tahrirlash, maxfiylik sozlamalari, faol seanslar | ⬜ |
 | Ko'p akkaunt | ⬜ |
 

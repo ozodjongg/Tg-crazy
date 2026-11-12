@@ -87,6 +87,8 @@ interface AppState {
   /** Qidiruvdan topilgan (ro'yxatda bo'lmasligi mumkin) chatni ochadi. */
   openPeer: (hit: tg.PeerHit) => Promise<void>;
   joinChat: (chatId: number) => Promise<void>;
+  /** Yangi guruh/kanal yaratadi va ochadi. */
+  createChat: (kind: "group" | "channel", title: string, opts: { userIds?: number[]; description?: string }) => Promise<void>;
   /** Chatni ochib, berilgan xabarga o'tadi (global qidiruvdan). */
   openChatAt: (chatId: number, messageId: number) => Promise<void>;
   clearJump: () => void;
@@ -442,6 +444,32 @@ export const useApp = create<AppState>((set, get) => {
         set({ chats: [...get().chats.filter((c) => !c.ephemeral), temp] });
       }
       await get().openChat(hit.id);
+    },
+
+    async createChat(kind, title, opts) {
+      try {
+        let id: number;
+        if (kind === "group") {
+          const res = await tg.createGroup(title, opts.userIds ?? []);
+          id = res.id;
+          if (res.failed) get().showNotice(`${res.failed} kishini maxfiylik sozlamalari tufayli qo'shib bo'lmadi`);
+        } else {
+          id = await tg.createChannel(title, opts.description ?? "");
+        }
+        // Yangi chat dialoglar ro'yxatida darhol bo'lmasligi mumkin
+        const chats = sortChats(await tg.loadChats().catch(() => get().chats));
+        if (!chats.some((c) => c.id === id)) {
+          chats.unshift({
+            id, title, kind, lastText: "", lastId: 0, lastDate: Date.now(), lastOutgoing: false, lastSender: "",
+            readOutboxMaxId: 0, readInboxMaxId: 0, unread: 0, mentions: 0, markedUnread: false, pinned: false,
+            muted: false, archived: false, isContact: false, presence: null, verified: false, isSelf: false, draft: "",
+          });
+        }
+        set({ chats });
+        await get().openChat(id);
+      } catch (err) {
+        fail(err);
+      }
     },
 
     async joinChat(chatId) {
