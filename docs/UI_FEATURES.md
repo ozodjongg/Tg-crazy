@@ -80,7 +80,9 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Sozlamalar: matn o'lchami, chat foni, bildirishnomalar | ✅ |
 | Rasm ko'rgichda galereya (oldingi/keyingi), saqlash | ✅ |
 | Kontaktlar (qidiruv, onlayn holati), yangi shaxsiy chat, guruh (a'zolar bilan) va kanal yaratish | ✅ |
-| Profilni tahrirlash, maxfiylik sozlamalari, faol seanslar | ⬜ |
+| Profilni tahrirlash: rasm, ism, familiya, bio, username (jonli tekshiruv) | ✅ |
+| Maxfiylik sozlamalari | ⬜ |
+| Faol seanslar | ⬜ |
 | Ko'p akkaunt | ⬜ |
 
 ## V6 — Murakkab va keyingi

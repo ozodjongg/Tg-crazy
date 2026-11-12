@@ -282,6 +282,58 @@ export async function searchPublic(query: string, limit = 20): Promise<PeerHit[]
   return out;
 }
 
+// ---- O'z profilim ----
+
+export interface MyProfile {
+  id: number;
+  firstName: string;
+  lastName: string;
+  bio: string;
+  username: string | null;
+  phone: string | null;
+}
+
+export async function loadMyProfile(): Promise<MyProfile> {
+  const client = await getClient();
+  const u = await client.getFullUser("me");
+  rememberPeer(u);
+  return {
+    id: u.id, firstName: u.firstName, lastName: u.lastName ?? "", bio: u.bio,
+    username: u.username, phone: u.phoneNumber,
+  };
+}
+
+export async function updateMyProfile(p: { firstName: string; lastName: string; bio: string }): Promise<Me> {
+  const client = await getClient();
+  const u = await client.updateProfile(p);
+  rememberPeer(u);
+  return { id: u.id, name: peerTitle(u) };
+}
+
+/** Username bo'shmi (o'zimizniki ham "bo'sh" hisoblanadi). */
+export async function checkUsername(username: string): Promise<boolean> {
+  const client = await getClient();
+  return client.call({ _: "account.checkUsername", username });
+}
+
+export async function setMyUsername(username: string): Promise<void> {
+  const client = await getClient();
+  rememberPeer(await client.setMyUsername(username || null));
+}
+
+export async function setMyPhoto(file: File): Promise<void> {
+  const client = await getClient();
+  await client.setMyProfilePhoto({ type: "photo", media: file });
+  rememberPeer(await client.getUser("me"));
+}
+
+export async function removeMyPhoto(): Promise<void> {
+  const client = await getClient();
+  const [current] = await client.getProfilePhotos("me", { limit: 1 });
+  if (current) await client.deleteProfilePhotos(current.fileId);
+  rememberPeer(await client.getUser("me"));
+}
+
 // ---- Kontaktlar va yangi chatlar ----
 
 export interface Contact {

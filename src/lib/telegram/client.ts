@@ -17,6 +17,11 @@ export function getClient(): Promise<TelegramClient> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("Telegram klienti faqat brauzerda ishlaydi"));
   }
+  // Faqat ishlab chiqishda: brauzer sinovlari soxta klient bera oladi (production'da bu blok yo'q)
+  if (process.env.NODE_ENV !== "production") {
+    const mock = (window as unknown as { __tgMockClient?: TelegramClient }).__tgMockClient;
+    if (mock) return Promise.resolve(mock);
+  }
   if (!hasCredentials()) {
     return Promise.reject(new Error("API_ID / API_HASH sozlanmagan"));
   }

@@ -7,6 +7,7 @@ import { Avatar } from "./Avatar";
 import { Icon, type IconName } from "./Icon";
 import { SettingsDialog } from "./SettingsDialog";
 import { NewChatDialog, type NewChatMode } from "./NewChatDialog";
+import { ProfileEditDialog } from "./ProfileEditDialog";
 
 const THEMES: { id: Theme; label: string; icon: IconName }[] = [
   { id: "system", label: "Tizim", icon: "monitor" },
@@ -90,20 +91,23 @@ function Services() {
 export function SideMenu({ onClose }: { onClose: () => void }) {
   const [settings, setSettings] = useState(false);
   const [newChat, setNewChat] = useState<NewChatMode | null>(null);
+  const [editing, setEditing] = useState(false);
+  const meVersion = useApp((s) => s.meVersion);
   const me = useApp((s) => s.me);
   const theme = useApp((s) => s.theme);
   const setTheme = useApp((s) => s.setTheme);
   const logOut = useApp((s) => s.logOut);
 
   useEffect(() => {
-    if (settings || newChat) return;
+    if (settings || newChat || editing) return;
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, settings, newChat]);
+  }, [onClose, settings, newChat, editing]);
 
   if (settings) return <SettingsDialog onClose={onClose} />;
   if (newChat) return <NewChatDialog mode={newChat} onClose={onClose} />;
+  if (editing) return <ProfileEditDialog onClose={onClose} />;
 
   const item = "mb-1 flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-hover";
 
@@ -115,10 +119,18 @@ export function SideMenu({ onClose }: { onClose: () => void }) {
         className="absolute left-3 top-14 z-20 w-72 rounded-2xl border border-border bg-bg p-2 shadow-lg"
       >
         {me && (
-          <div className="flex items-center gap-3 px-2 py-2">
-            <Avatar id={me.id} title={me.name} size={36} />
-            <span className="min-w-0 truncate font-medium">{me.name}</span>
-          </div>
+          <button
+            role="menuitem"
+            className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-hover"
+            title="Profilni tahrirlash"
+            onClick={() => setEditing(true)}
+          >
+            <Avatar key={meVersion} id={me.id} title={me.name} size={36} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium">{me.name}</span>
+              <span className="block text-xs text-accent">Profilni tahrirlash</span>
+            </span>
+          </button>
         )}
         <div className="my-1 border-t border-border" />
         <button role="menuitem" className={item} onClick={() => setNewChat("contacts")}>

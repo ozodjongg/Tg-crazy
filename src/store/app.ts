@@ -119,6 +119,10 @@ interface AppState {
   votePoll: (msg: MessageItem, answers: string[]) => Promise<void>;
   pressButton: (msg: MessageItem, data: string) => Promise<void>;
   showNotice: (text: string | null) => void;
+  /** Profil tahrirlangach: ism va avatar yangilanadi */
+  setMe: (me: Me) => void;
+  /** O'z avatarim o'zgarganda oshadi (rasmni qayta yuklash uchun) */
+  meVersion: number;
 }
 
 let phone = "";
@@ -286,6 +290,7 @@ export const useApp = create<AppState>((set, get) => {
     pinnedIndex: 0,
     profileOpen: false,
     scheduled: [],
+    meVersion: 0,
     replyTo: null,
     editing: null,
     typing: {},
@@ -784,6 +789,10 @@ export const useApp = create<AppState>((set, get) => {
       } catch (err) {
         set({ error: errorText(err) });
       }
+    },
+
+    setMe(me) {
+      set({ me, meVersion: get().meVersion + 1 });
     },
 
     showNotice(notice) {
