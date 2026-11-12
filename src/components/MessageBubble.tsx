@@ -31,6 +31,8 @@ export interface BubbleProps {
   /** Ko'p tanlash rejimi: undefined — rejim o'chiq; aks holda xabar tanlanganmi */
   selected?: boolean;
   onSelect?: () => void;
+  /** Kanal posti: izohlarni ochish (izoh yoqilgan bo'lsa) */
+  onComments?: (msg: MessageItem) => void;
 }
 
 function formatViews(n: number): string {
@@ -64,7 +66,7 @@ function Album({ items, onOpen }: { items: MessageItem[]; onOpen: (m: MessageIte
 
 export function MessageBubble({
   msg, album, repliedTo, inGroup, first, last, read, converted, onMenu, onReact, onJumpTo, onOpenMedia,
-  selected, onSelect,
+  selected, onSelect, onComments,
 }: BubbleProps) {
   if (msg.service) {
     return (
@@ -208,6 +210,18 @@ export function MessageBubble({
             </>
           )}
         </div>
+        {onComments && msg.comments !== null && msg.comments !== undefined && (
+          <button
+            className={`mt-1 flex items-center gap-2 rounded-2xl border border-border bg-bg px-3 py-1.5 text-sm text-accent hover:bg-hover ${bare ? "" : "w-full"}`}
+            onClick={() => onComments(msg)}
+          >
+            <Icon name="comment" size={16} />
+            <span className="flex-1 text-left font-medium">
+              {msg.comments > 0 ? `${msg.comments} ta izoh` : "Izoh qoldirish"}
+            </span>
+            <span aria-hidden>›</span>
+          </button>
+        )}
         {msg.keyboard && <InlineKeyboard msg={msg} />}
         {msg.reactions.length > 0 && (
           <div className={`mt-1 flex flex-wrap gap-1 ${out ? "justify-end" : ""}`}>

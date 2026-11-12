@@ -6,7 +6,7 @@ import { isRpcError } from "./errors";
 import { rememberMedia, rememberPeer } from "./media";
 import {
   fromBase64, toChatItem, toMessageItem, toPollInfo, peerKind, peerPresence, peerTitle,
-  type ChatItem, type ChatKind, type Me, type MessageItem, type PollInfo, type Presence,
+  itemPreview, type ChatItem, type ChatKind, type Me, type MessageItem, type PollInfo, type Presence,
 } from "./types";
 
 function item(m: Message): MessageItem {
@@ -176,6 +176,84 @@ export async function deleteChat(chatId: number, revoke: boolean): Promise<void>
 }
 
 // ---- Xabarlar ----
+
+// ---- Iplar: forum mavzulari va kanal izohlari ----
+
+export interface Topic {
+  id: number;
+  title: string;
+  /** Ikonka rangi (#rrggbb) */
+  color: string;
+  lastText: string;
+  lastDate: number | null;
+  lastSender: string;
+  unread: number;
+  pinned: boolean;
+  closed: boolean;
+}
+
+export async function loadTopics(chatId: number, limit = 100): Promise<Topic[]> {
+  const client = await getClient();
+  const res = await client.getForumTopics(chatId, { limit });
+  return res
+    .map((t) => {
+      const last = t.lastMessage;
+      return {
+        id: t.id,
+        title: t.title,
+        color: `#${(t.iconColor ?? 0x6fb9f0).toString(16).padStart(6, "0")}`,
+        lastText: last ? itemPreview(item(last)) : "",
+        lastDate: last ? last.date.getTime() : null,
+        lastSender: last ? peerTitle(last.sender) : "",
+        unread: t.unreadCount,
+        pinned: t.isPinned,
+        closed: t.isClosed,
+      };
+    })
+    .sort((a, b) => Number(b.pinned) - Number(a.pinned) || (b.lastDate ?? 0) - (a.lastDate ?? 0));
+}
+
+export async function createTopic(chatId: number, title: string): Promise<number> {
+  const client = await getClient();
+  const msg = await client.createForumTopic({ chatId, title });
+  return msg.id;
+}
+
+/**
+ * Ip xabarlari (eskidan yangiga): forum mavzusi yoki post izohlari.
+ * offsetId — shu ID dan eskilari (0 — eng so'nggilari).
+ */
+export async function loadThread(chatId: number, topId: number, offsetId = 0): Promise<MessageItem[]> {
+  const client = await getClient();
+  const { Long, Message, PeersIndex } = await import("@mtcute/web");
+  const res = await client.call({
+    _: "messages.getReplies",
+    peer: await client.resolvePeer(chatId),
+    msgId: topId,
+    offsetId,
+    offsetDate: 0,
+    addOffset: 0,
+    limit: PAGE_SIZE,
+    maxId: 0,
+    minId: 0,
+    hash: Long.ZERO,
+  });
+  if (res._ === "messages.messagesNotModified") return [];
+  const peers = PeersIndex.from(res);
+  return res.messages
+    .filter((m) => m._ !== "messageEmpty")
+    .map((m) => item(new Message(m, peers)))
+    .reverse();
+}
+
+/** Kanal posti izohlari: muhokama guruhi va undagi ip boshi (asl post nusxasi). */
+export async function openComments(channelId: number, postId: number): Promise<{ chatId: number; topId: number; root: MessageItem } | null> {
+  const client = await getClient();
+  const m = await client.getDiscussionMessage({ chatId: channelId, message: postId });
+  if (!m) return null;
+  rememberPeer(m.chat);
+  return { chatId: m.chat.id, topId: m.id, root: item(m) };
+}
 
 export const PAGE_SIZE = 50;
 

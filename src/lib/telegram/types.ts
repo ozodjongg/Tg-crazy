@@ -39,6 +39,8 @@ export interface ChatItem {
   isSelf: boolean;
   /** Saqlangan qoralama matni */
   draft: string;
+  /** Forum (mavzularga bo'lingan) guruh */
+  forum?: boolean;
   /** Qadalganlar orasidagi joy (0 — eng tepada); qadalmaganlarda yo'q */
   pinnedOrder?: number;
   /** Qidiruvdan ochilgan, ro'yxatda yo'q chat (faqat ochiq turganda ko'rinadi) */
@@ -155,6 +157,10 @@ export interface MessageItem {
   keyboard: InlineButton[][] | null;
   /** Bizni eslatgan xabar */
   mention: boolean;
+  /** Qaysi ipga tegishli: forum mavzusi yoki izohlar ildizi (ID) */
+  threadId?: number | null;
+  /** Kanal posti: izohlar soni (izoh yoqilgan bo'lsa) */
+  comments?: number | null;
 }
 
 export interface Me {
@@ -386,6 +392,7 @@ export function toChatItem(d: Dialog): ChatItem {
     verified: peer.isVerified,
     isSelf: peer.type === "user" && peer.isSelf,
     draft: d.draftMessage?.text ?? "",
+    forum: peer.type === "chat" && peer.isForum,
   };
 }
 
@@ -405,7 +412,10 @@ export function toMessageItem(m: Message): MessageItem {
     senderName: peerTitle(m.sender),
     service,
     edited: m.editDate !== null && !m.hideEditMark,
-    replyToId: m.replyToMessage?.id ?? null,
+    // Forum mavzusidagi oddiy xabar mavzu boshiga "javob" sifatida keladi — u javob emas
+    replyToId: m.replyToMessage?.isForumTopic && m.replyToMessage.threadId === null ? null : (m.replyToMessage?.id ?? null),
+    threadId: m.replyToMessage ? (m.replyToMessage.threadId ?? m.replyToMessage.id) : null,
+    comments: m.replies?.hasComments ? m.replies.count : null,
     media,
     reactions: (m.reactions?.reactions ?? [])
       // Maxsus (premium) emoji-reaksiyalar hozircha ko'rsatilmaydi

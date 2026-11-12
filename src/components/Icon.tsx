@@ -5,6 +5,8 @@ const PATHS = {
   send: "M12 19V5m0 0-6 6m6-6 6 6",
   down: "M12 5v14m0 0 6-6m-6 6-6-6",
   up: "M12 19V5m0 0-6 6m6-6 6 6",
+  lock: "M6 11h12v9H6v-9Zm2 0V8a4 4 0 0 1 8 0v3",
+  comment: "M4 5h16v11H9l-5 4V5Z",
   more: "M12 6h.01M12 12h.01M12 18h.01",
   pin: "M9 4h6l-1 6 3 3H7l3-3-1-6Zm3 9v7",
   mute: "M11 5 6 9H3v6h3l5 4V5Zm5 5 5 5m0-5-5 5",

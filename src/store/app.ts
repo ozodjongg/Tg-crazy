@@ -34,6 +34,20 @@ export type ChatAction =
   | "pin" | "unpin" | "mute" | "unmute" | "archive" | "unarchive" | "read" | "unread"
   | "delete" | "delete-both";
 
+/** Ochiq ip: forum mavzusi yoki kanal posti izohlari */
+export interface Thread {
+  kind: "topic" | "comments";
+  /** Xabarlar joylashgan chat (izohlarda — muhokama guruhi) */
+  chatId: number;
+  /** Ip boshi xabari ID si */
+  topId: number;
+  title: string;
+  /** Izohlar: asl post (ip tepasida ko'rsatiladi) */
+  root?: MessageItem;
+  /** Izohlar ochilgan kanal posti — orqaga qaytish uchun */
+  postId?: number;
+}
+
 export type AuthStep = "loading" | "no-credentials" | "phone" | "code" | "password" | "ready";
 
 interface AppState {
@@ -62,6 +76,10 @@ interface AppState {
   pinnedIndex: number;
   /** Joriy chatda rejalashtirilgan xabarlar (vaqt bo'yicha) */
   scheduled: MessageItem[];
+  /** Forum chatning mavzulari (null — forum emas yoki yuklanmagan) */
+  topics: tg.Topic[] | null;
+  /** Ochiq ip (mavzu yoki izohlar) */
+  thread: Thread | null;
   /** O'ng tomondagi profil paneli */
   profileOpen: boolean;
   /** Yozish maydoni holati: javob berilayotgan yoki tahrirlanayotgan xabar */
@@ -88,6 +106,11 @@ interface AppState {
   loadOlder: () => Promise<void>;
   loadNewer: () => Promise<void>;
   jumpTo: (messageId: number) => Promise<void>;
+  openTopic: (topic: tg.Topic) => Promise<void>;
+  openComments: (post: MessageItem) => Promise<void>;
+  /** Ipdan chiqish: mavzular ro'yxatiga yoki kanal postiga qaytish */
+  closeThread: () => Promise<void>;
+  createTopic: (title: string) => Promise<void>;
   /** Qidiruvdan topilgan (ro'yxatda bo'lmasligi mumkin) chatni ochadi. */
   openPeer: (hit: tg.PeerHit) => Promise<void>;
   joinChat: (chatId: number) => Promise<void>;
@@ -163,6 +186,25 @@ export const useApp = create<AppState>((set, get) => {
     } finally {
       set({ busy: false });
     }
+  }
+
+  /** Yuboriladigan joy: ochiq ip bo'lsa uning chati va boshi (javob berilmasa ipga yoziladi). */
+  function target() {
+    const { activeChatId, thread, replyTo } = get();
+    return { chatId: thread?.chatId ?? activeChatId, replyId: replyTo?.id ?? thread?.topId };
+  }
+
+  /** Ip ichida ip boshiga "javob" ko'rinmaydi — u oddiy xabar */
+  function inThread(msgs: MessageItem[], t: Thread): MessageItem[] {
+    return msgs.map((m) => (m.replyToId === t.topId ? { ...m, replyToId: null } : m));
+  }
+
+  /** Xabar hozir ko'rinib turgan ro'yxatga tegishlimi */
+  function belongsToView(msg: MessageItem): boolean {
+    const { activeChatId, thread, topics, hasNewer } = get();
+    if (thread) return msg.chatId === thread.chatId && (msg.threadId === thread.topId || msg.id === thread.topId);
+    if (topics) return false; // mavzular ro'yxati ochiq
+    return msg.chatId === activeChatId && !hasNewer;
   }
 
   /** Xatoni ko'rsatadi va chaqiruvchiga qayta uzatadi (UI holatini tiklashi uchun). */
@@ -269,7 +311,15 @@ export const useApp = create<AppState>((set, get) => {
     if (!msg.outgoing) delete nextTyping[msg.chatId];
     set({
       chats: sortChats([updated, ...chats.filter((c) => c.id !== msg.chatId)]),
-      messages: isActive && !get().hasNewer ? upsertMessage(messages, msg) : messages,
+      messages: belongsToView(msg) ? upsertMessage(messages, get().thread ? inThread([msg], get().thread!)[0] : msg) : messages,
+      // Forum: mavzu ro'yxatidagi oxirgi xabar va o'qilmaganlar
+      topics: isActive && get().topics && msg.threadId
+        ? get().topics!.map((t) =>
+            t.id === msg.threadId
+              ? { ...t, lastText: itemPreview(msg), lastDate: msg.date, lastSender: msg.senderName, unread: msg.outgoing ? t.unread : t.unread + 1 }
+              : t,
+          )
+        : get().topics,
       typing: nextTyping,
     });
     if (isActive && !msg.outgoing) void tg.markRead(msg.chatId).catch(() => {});
@@ -310,6 +360,8 @@ export const useApp = create<AppState>((set, get) => {
     pinnedIndex: 0,
     profileOpen: false,
     scheduled: [],
+    topics: null,
+    thread: null,
     meVersion: 0,
     replyTo: null,
     editing: null,
@@ -398,8 +450,20 @@ export const useApp = create<AppState>((set, get) => {
         activeChatId: chatId, messages: [], messagesLoading: chatId !== null, hasMore: false, hasNewer: false,
         loadingOlder: false, loadingNewer: false, replyTo: null, editing: null, error: null, upload: null,
         draft: chat?.draft ?? "", unreadAnchor: anchor, jumpTarget: null, pinned: [], pinnedIndex: 0, scheduled: [],
+        thread: null, topics: null,
       });
       if (chatId === null) return;
+      if (chat?.forum) {
+        // Forum: xabarlar o'rniga mavzular ro'yxati
+        set({ messagesLoading: false, topics: [] });
+        try {
+          const topics = await tg.loadTopics(chatId);
+          if (get().activeChatId === chatId && !get().thread) set({ topics });
+        } catch (err) {
+          if (get().activeChatId === chatId) set({ error: errorText(err) });
+        }
+        return;
+      }
       void get().refreshScheduled();
       // Qadalgan xabarlar fonda yuklanadi
       tg.loadShared(chatId, "pinned", 20).then(
@@ -459,6 +523,75 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     clearJump: () => set({ jumpTarget: null }),
+
+    async openTopic(topic) {
+      const chatId = get().activeChatId;
+      if (chatId === null) return;
+      const thread: Thread = { kind: "topic", chatId, topId: topic.id, title: topic.title };
+      set({
+        thread, messages: [], messagesLoading: true, hasMore: false, hasNewer: false, replyTo: null, editing: null,
+        unreadAnchor: null, topics: (get().topics ?? []).map((t) => (t.id === topic.id ? { ...t, unread: 0 } : t)),
+      });
+      try {
+        const messages = inThread(await tg.loadThread(chatId, topic.id), thread);
+        if (get().thread !== thread) return;
+        set({ messages, messagesLoading: false, hasMore: messages.length >= tg.PAGE_SIZE / 2 });
+        void tg.markRead(chatId).catch(() => {});
+      } catch (err) {
+        if (get().thread === thread) set({ messagesLoading: false, error: errorText(err) });
+      }
+    },
+
+    async openComments(post) {
+      try {
+        const found = await tg.openComments(post.chatId, post.id);
+        if (!found) {
+          get().showNotice("Bu post uchun izohlar yo'q");
+          return;
+        }
+        const thread: Thread = {
+          kind: "comments", chatId: found.chatId, topId: found.topId, title: "Izohlar", root: found.root, postId: post.id,
+        };
+        set({ thread, messages: [], messagesLoading: true, hasMore: false, hasNewer: false, replyTo: null, editing: null, unreadAnchor: null });
+        const messages = inThread(await tg.loadThread(found.chatId, found.topId), thread);
+        if (get().thread !== thread) return;
+        set({ messages, messagesLoading: false, hasMore: messages.length >= tg.PAGE_SIZE / 2 });
+      } catch (err) {
+        set({ messagesLoading: false });
+        fail(err);
+      }
+    },
+
+    async closeThread() {
+      const { thread, activeChatId } = get();
+      if (!thread || activeChatId === null) return;
+      if (thread.kind === "comments") {
+        // Kanalga qaytamiz — post joyida
+        if (thread.postId) await get().openChatAt(activeChatId, thread.postId);
+        else await get().openChat(activeChatId);
+        return;
+      }
+      set({ thread: null, messages: [], replyTo: null, editing: null, hasMore: false });
+      try {
+        const topics = await tg.loadTopics(activeChatId);
+        if (get().activeChatId === activeChatId && !get().thread) set({ topics });
+      } catch {
+        // Eski ro'yxat qoladi
+      }
+    },
+
+    async createTopic(title) {
+      const chatId = get().activeChatId;
+      if (chatId === null) return;
+      try {
+        const id = await tg.createTopic(chatId, title);
+        await get().openTopic({
+          id, title, color: "#6fb9f0", lastText: "", lastDate: Date.now(), lastSender: "", unread: 0, pinned: false, closed: false,
+        });
+      } catch (err) {
+        fail(err);
+      }
+    },
 
     async openPeer(hit) {
       if (!get().chats.some((c) => c.id === hit.id)) {
@@ -536,12 +669,15 @@ export const useApp = create<AppState>((set, get) => {
     setProfileOpen: (profileOpen) => set({ profileOpen }),
 
     async loadOlder() {
-      const { activeChatId: chatId, messages, hasMore, loadingOlder } = get();
+      const { activeChatId: chatId, messages, hasMore, loadingOlder, thread } = get();
       const oldest = messages[0];
       if (chatId === null || !oldest || !hasMore || loadingOlder) return;
       set({ loadingOlder: true });
       try {
-        const older = await tg.loadHistory(chatId, { id: oldest.id, date: Math.floor(oldest.date / 1000) });
+        const older = thread
+          ? inThread(await tg.loadThread(thread.chatId, thread.topId, oldest.id), thread)
+          : await tg.loadHistory(chatId, { id: oldest.id, date: Math.floor(oldest.date / 1000) });
+        if (thread && get().thread !== thread) return;
         if (get().activeChatId !== chatId) return;
         set({ messages: prependOlder(get().messages, older), hasMore: older.length >= tg.PAGE_SIZE });
       } catch (err) {
@@ -602,20 +738,21 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     async send(text, silent = false, schedule) {
-      const { activeChatId: chatId, editing, replyTo } = get();
+      const { editing } = get();
+      const { chatId, replyId } = target();
       const body = text.trim();
       if (chatId === null || !body) return;
       try {
         if (editing) {
           if (body !== toMarkdown(editing.text, editing.entities)) {
-            const msg = await tg.editText(chatId, editing.id, body);
-            if (get().activeChatId === chatId) set({ messages: replaceMessage(get().messages, msg) });
+            const msg = await tg.editText(editing.chatId, editing.id, body);
+            set({ messages: replaceMessage(get().messages, msg) });
           }
           set({ editing: null, draft: "" });
           return;
         }
         if (schedule !== undefined) {
-          const msg = await tg.sendText(chatId, body, replyTo?.id, silent, schedule);
+          const msg = await tg.sendText(chatId, body, replyId, silent, schedule);
           set({
             replyTo: null,
             draft: "",
@@ -626,7 +763,7 @@ export const useApp = create<AppState>((set, get) => {
           );
           return;
         }
-        const msg = await tg.sendText(chatId, body, replyTo?.id, silent);
+        const msg = await tg.sendText(chatId, body, replyId, silent);
         set({ replyTo: null, draft: "" });
         // O'z xabarimiz update orqali ham kelishi mumkin — upsert takrorni birlashtiradi
         handleIncoming(msg);
@@ -638,13 +775,13 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     async sendFile(file, caption) {
-      const { activeChatId: chatId, replyTo } = get();
+      const { chatId, replyId } = target();
       if (chatId === null) return;
       set({ upload: { name: file.name, fraction: 0 }, error: null });
       try {
         const msg = await tg.sendFile(chatId, file, {
           caption: caption.trim(),
-          replyTo: replyTo?.id,
+          replyTo: replyId,
           onProgress: (fraction) => {
             if (get().upload) set({ upload: { name: file.name, fraction } });
           },
@@ -659,10 +796,10 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     async sendSticker(key) {
-      const { activeChatId: chatId, replyTo } = get();
+      const { chatId, replyId } = target();
       if (chatId === null) return;
       try {
-        const msg = await tg.sendSticker(chatId, key, replyTo?.id);
+        const msg = await tg.sendSticker(chatId, key, replyId);
         set({ replyTo: null });
         handleIncoming(msg);
       } catch (err) {
@@ -671,14 +808,14 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     async sendVoice(file, duration, waveform) {
-      const { activeChatId: chatId, replyTo } = get();
+      const { chatId, replyId } = target();
       if (chatId === null) return;
       set({ upload: { name: "Ovozli xabar", fraction: 0 }, error: null });
       try {
         const msg = await tg.sendVoice(chatId, file, {
           duration,
           waveform,
-          replyTo: replyTo?.id,
+          replyTo: replyId,
           onProgress: (fraction) => {
             if (get().upload) set({ upload: { name: "Ovozli xabar", fraction } });
           },
@@ -693,10 +830,10 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     async sendGif(key) {
-      const { activeChatId: chatId, replyTo } = get();
+      const { chatId, replyId } = target();
       if (chatId === null) return;
       try {
-        const msg = await tg.sendGif(chatId, key, replyTo?.id);
+        const msg = await tg.sendGif(chatId, key, replyId);
         set({ replyTo: null });
         handleIncoming(msg);
       } catch (err) {
@@ -844,7 +981,7 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     notifyTyping() {
-      const chatId = get().activeChatId;
+      const { chatId } = target();
       const now = Date.now();
       if (chatId === null || now - lastTypingSent < TYPING_THROTTLE) return;
       lastTypingSent = now;

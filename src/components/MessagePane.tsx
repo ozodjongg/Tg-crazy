@@ -17,6 +17,7 @@ import { Lightbox } from "./MediaView";
 import { MessageBubble } from "./MessageBubble";
 import { MessageMenu, type MenuAction } from "./MessageMenu";
 import { ScheduledDialog } from "./Schedule";
+import { TopicList } from "./TopicList";
 import { chatTitle } from "./ChatList";
 
 const KIND_LABEL: Record<ChatKind, string> = {
@@ -196,6 +197,10 @@ export function MessagePane() {
   const cyclePinned = useApp((s) => s.cyclePinned);
   const setProfileOpen = useApp((s) => s.setProfileOpen);
   const [searchOpen, setSearchOpen] = useState(false);
+  const topics = useApp((s) => s.topics);
+  const thread = useApp((s) => s.thread);
+  const closeThread = useApp((s) => s.closeThread);
+  const openComments = useApp((s) => s.openComments);
   const scheduledCount = useApp((s) => s.scheduled.length);
   const [scheduledOpen, setScheduledOpen] = useState(false);
   /** Qaysi chat uchun boshlang'ich joy (o'qilmaganlar yoki oxiri) tanlangan */
@@ -276,7 +281,8 @@ export function MessagePane() {
 
   const title = chat ? chatTitle(chat) : "Chat";
   const kind: ChatKind = chat?.kind ?? (activeChatId < 0 ? "group" : "user");
-  const inGroup = kind === "group";
+  // Izohlar muhokama guruhida — yozuvchilar ismi va avatari bilan
+  const inGroup = kind === "group" || thread?.kind === "comments";
   const readMaxId = chat?.readOutboxMaxId ?? 0;
   const convertAll = convertedChat === activeChatId;
   const sub = subtitle(chat, kind, isTyping);
@@ -349,7 +355,7 @@ export function MessagePane() {
     >
       <header className="flex items-center gap-2 border-b border-border bg-bg px-3 py-2">
         <button
-          className="flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-text md:hidden"
+          className={`flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-text md:hidden ${thread ? "!hidden" : ""}`}
           aria-label="Chatlar ro'yxatiga qaytish"
           onClick={() => {
             nearBottom.current = true;
@@ -358,6 +364,16 @@ export function MessagePane() {
         >
           <Icon name="back" />
         </button>
+        {thread && (
+          <button
+            className="flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-text"
+            aria-label={thread.kind === "topic" ? "Mavzular ro'yxatiga qaytish" : "Kanalga qaytish"}
+            title={thread.kind === "topic" ? "Mavzular" : "Kanalga qaytish"}
+            onClick={() => void closeThread()}
+          >
+            <Icon name="back" />
+          </button>
+        )}
         <button
           className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-0.5 text-left"
           aria-label="Profilni ochish"
@@ -366,13 +382,19 @@ export function MessagePane() {
           <Avatar id={activeChatId} title={title} size={40} saved={chat?.isSelf} />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1">
-              <span className="truncate font-medium leading-tight">{title}</span>
+              <span className="truncate font-medium leading-tight">{thread ? thread.title : title}</span>
               {chat?.verified && <Icon name="verified" size={15} className="shrink-0 text-accent" />}
             </span>
-            {sub.text && (
-              <span className={`block truncate text-sm ${sub.accent ? "text-accent" : "text-muted"}`} aria-live="polite">
-                {sub.text}
-              </span>
+            {thread ? (
+              <span className="block truncate text-sm text-muted">{thread.kind === "topic" ? title : `${title} · post izohlari`}</span>
+            ) : topics ? (
+              <span className="block truncate text-sm text-muted">{topics.length ? `${topics.length} ta mavzu` : "forum"}</span>
+            ) : (
+              sub.text && (
+                <span className={`block truncate text-sm ${sub.accent ? "text-accent" : "text-muted"}`} aria-live="polite">
+                  {sub.text}
+                </span>
+              )
             )}
           </span>
         </button>
@@ -438,6 +460,9 @@ export function MessagePane() {
         </button>
       )}
 
+      {topics && !thread ? (
+        <TopicList topics={topics} />
+      ) : (
       <div className="relative flex min-h-0 flex-1 flex-col">
         <div ref={scrollRef} onScroll={onScroll} className="chat-wallpaper thin-scroll flex-1 overflow-y-auto px-3 py-3">
           {loading && <p className="py-6 text-center text-sm text-muted">Xabarlar yuklanmoqda…</p>}
@@ -446,6 +471,27 @@ export function MessagePane() {
             <p className="py-6 text-center text-sm text-muted">Bu yerda hali xabar yo&apos;q</p>
           )}
           <ul className="mx-auto flex max-w-3xl flex-col gap-0.5">
+            {thread?.root && !hasMore && (
+              <>
+                <MessageBubble
+                  msg={thread.root}
+                  album={null}
+                  repliedTo={null}
+                  inGroup={false}
+                  first
+                  last
+                  read
+                  converted={false}
+                  onMenu={() => {}}
+                  onReact={(m, emoji) => void react(m, emoji)}
+                  onJumpTo={() => {}}
+                  onOpenMedia={() => {}}
+                />
+                <li className="my-3 self-center rounded-full bg-accent/10 px-3 py-0.5 text-xs font-medium text-accent">
+                  {messages.length ? "Izohlar boshi" : "Hali izoh yo'q — birinchi bo'ling"}
+                </li>
+              </>
+            )}
             {rows.map(({ msg, album }, i) => {
               const prev = rows[i - 1]?.msg;
               const next = rows[i + 1]?.msg;
@@ -483,6 +529,7 @@ export function MessagePane() {
                     onJumpTo={jumpTo}
                     selected={selected ? (album ?? [msg]).every((m) => selected.has(m.id)) : undefined}
                     onSelect={() => toggleSelect(idsOf(msg))}
+                    onComments={kind === "channel" && !thread ? (m) => void openComments(m) : undefined}
                   />
                 </Fragment>
               );
@@ -499,6 +546,7 @@ export function MessagePane() {
           </button>
         )}
       </div>
+      )}
 
       {error && (
         <p role="alert" className="mx-3 mb-1 rounded-xl bg-danger-soft px-4 py-2 text-sm text-danger">
@@ -517,7 +565,7 @@ export function MessagePane() {
             onForward={() => setForwarding(selectedMsgs)}
             onDelete={() => setDeleting(selectedMsgs)}
           />
-        ) : chat?.joinable ? (
+        ) : topics && !thread ? null : chat?.joinable ? (
           <JoinBar chatId={activeChatId} channel={kind === "channel"} />
         ) : (
           <Composer key={activeChatId} />

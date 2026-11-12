@@ -51,8 +51,8 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Profil panelida umumiy media: rasmlar, fayllar, havolalar, ovozlar | ✅ |
 | Guruh a'zolari ro'yxati | ✅ |
 | Xabarlarni ko'p tanlash: uzatish, o'chirish, nusxa (Esc — bekor) | ✅ |
-| Forum mavzulari (topics) | ⬜ |
-| Kanal izohlari (comments) | ⬜ |
+| Forum mavzulari: ro'yxat (rang, o'qilmaganlar, qadalgan/yopiq), mavzu ichida yozish, yangi mavzu | ✅ |
+| Kanal izohlari: postda "N ta izoh", izohlar ipi (asl post tepada), izoh yozish | ✅ |
 
 ## V4 — Yozish maydoni
 
