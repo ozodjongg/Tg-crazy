@@ -2,12 +2,34 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 import { useApp } from "@/store/app";
+import { activeSlot, readAccounts, switchToSlot } from "@/lib/telegram/accounts";
 import { Logo } from "./Logo";
 
 const inputClass =
   "w-full rounded-xl border border-border bg-bg px-4 py-3 text-base placeholder:text-muted focus:border-accent";
 const buttonClass =
   "w-full rounded-xl bg-accent px-4 py-3 font-medium text-accent-text hover:bg-accent-hover disabled:opacity-50 disabled:hover:bg-accent";
+
+/** Yangi akkaunt qo'shilayotganda — mavjud akkauntlarga qaytish. */
+function BackToAccounts() {
+  const [list] = useState(() => {
+    const slot = activeSlot();
+    return readAccounts().filter((a) => a.slot !== slot);
+  });
+  if (list.length === 0) return null;
+  return (
+    <div className="mt-5 border-t border-border pt-4">
+      <p className="mb-2 text-sm text-muted">Yoki mavjud akkauntga qaytish:</p>
+      <div className="flex flex-wrap gap-2">
+        {list.map((a) => (
+          <button key={a.slot} className="rounded-full border border-border px-3 py-1.5 text-sm hover:bg-hover" onClick={() => switchToSlot(a.slot)}>
+            {a.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Shell({ title, hint, children }: { title: string; hint: ReactNode; children?: ReactNode }) {
   const error = useApp((s) => s.error);
@@ -23,6 +45,7 @@ function Shell({ title, hint, children }: { title: string; hint: ReactNode; chil
           </p>
         )}
         {children}
+        <BackToAccounts />
         <p className="mt-6 text-xs text-muted">
           Norasmiy klient. Sessiya faqat shu qurilmada saqlanadi va to&apos;g&apos;ridan-to&apos;g&apos;ri Telegram
           serverlariga ulanadi.

@@ -4,8 +4,11 @@
 // Bu yerga Telegram sessiyasi yoki yozishmalar yuborilmaydi — faqat foydalanuvchi
 // AI uchun o'zi tanlagan matn va Tg-crazy sozlamalari.
 
+import { activeSlot, slotKey } from "../telegram/accounts";
+
 const BASE = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
-const REFRESH_KEY = "tg-crazy:refresh";
+// Xizmatlarga ulanish har bir Telegram akkaunti uchun alohida
+const refreshKey = () => slotKey("tg-crazy:refresh", activeSlot());
 
 export const backendEnabled = BASE !== "";
 
@@ -25,7 +28,7 @@ let refreshing: Promise<boolean> | null = null;
 
 function storedRefresh(): string | null {
   try {
-    return localStorage.getItem(REFRESH_KEY);
+    return localStorage.getItem(refreshKey());
   } catch {
     return null;
   }
@@ -34,8 +37,8 @@ function storedRefresh(): string | null {
 function storeTokens(access: string | null, refresh: string | null) {
   accessToken = access;
   try {
-    if (refresh) localStorage.setItem(REFRESH_KEY, refresh);
-    else localStorage.removeItem(REFRESH_KEY);
+    if (refresh) localStorage.setItem(refreshKey(), refresh);
+    else localStorage.removeItem(refreshKey());
   } catch {
     // Saqlab bo'lmasa — ulanish faqat shu seansda amal qiladi
   }

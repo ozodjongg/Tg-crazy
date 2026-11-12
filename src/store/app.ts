@@ -1,6 +1,9 @@
 import { create } from "zustand";
 import * as tg from "@/lib/telegram/api";
 import { hasCredentials } from "@/lib/telegram/client";
+import {
+  activeSlot, duplicateSlot, readAccounts, removeSlot, switchToSlot, upsertAccount, writeAccounts,
+} from "@/lib/telegram/accounts";
 import { errorText } from "@/lib/telegram/errors";
 import { forgetChatMedia } from "@/lib/telegram/media";
 import { itemPreview, type ChatItem, type ChatKind, type Me, type MessageItem } from "@/lib/telegram/types";
@@ -162,6 +165,16 @@ export const useApp = create<AppState>((set, get) => {
   }
 
   async function enter(me: Me) {
+    const slot = activeSlot();
+    const accounts = readAccounts();
+    const dup = duplicateSlot(accounts, slot, me.id);
+    if (dup !== null) {
+      // Shu akkaunt boshqa slotda bor — ortiqcha sessiyani yopib, o'sha slotga o'tamiz
+      await tg.logOut().catch(() => {});
+      switchToSlot(dup);
+      return;
+    }
+    writeAccounts(upsertAccount(accounts, { slot, id: me.id, name: me.name }));
     set({ step: "ready", me, error: null });
     await tg.subscribe({
       onMessage: handleIncoming,
@@ -351,8 +364,11 @@ export const useApp = create<AppState>((set, get) => {
     logOut: () =>
       run(async () => {
         await tg.logOut();
-        // Klient va lokal sessiyani toza holatdan boshlash uchun sahifani qayta yuklaymiz
-        window.location.reload();
+        // Akkaunt ro'yxatdan chiqariladi; boshqasi bo'lsa unga o'tiladi
+        const rest = removeSlot(readAccounts(), activeSlot());
+        writeAccounts(rest);
+        // Klient va lokal sessiyani toza holatdan boshlash uchun sahifa qayta yuklanadi
+        switchToSlot(rest[0]?.slot ?? 0);
       }),
 
     clearError: () => set({ error: null }),
@@ -792,6 +808,7 @@ export const useApp = create<AppState>((set, get) => {
     },
 
     setMe(me) {
+      writeAccounts(upsertAccount(readAccounts(), { slot: activeSlot(), id: me.id, name: me.name }));
       set({ me, meVersion: get().meVersion + 1 });
     },
 

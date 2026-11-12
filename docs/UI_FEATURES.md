@@ -83,7 +83,7 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Profilni tahrirlash: rasm, ism, familiya, bio, username (jonli tekshiruv) | ✅ |
 | Maxfiylik: telefon, oxirgi faollik, rasm, bio, uzatish, qo'ng'iroqlar, guruhga qo'shish (istisnolar saqlanadi) | ✅ |
 | Faol seanslar: qurilma, ilova, joy, IP; bittasini yoki boshqa hammasini tugatish | ✅ |
-| Ko'p akkaunt | ⬜ |
+| Ko'p akkaunt (3 tagacha): menyuda almashtirish va qo'shish, har biri alohida sessiya | ✅ |
 
 ## V6 — Murakkab va keyingi
 

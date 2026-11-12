@@ -8,6 +8,8 @@ import { Icon, type IconName } from "./Icon";
 import { SettingsDialog } from "./SettingsDialog";
 import { NewChatDialog, type NewChatMode } from "./NewChatDialog";
 import { ProfileEditDialog } from "./ProfileEditDialog";
+import { MAX_ACCOUNTS, activeSlot, nextFreeSlot, readAccounts, switchToSlot, type AccountEntry } from "@/lib/telegram/accounts";
+import { avatarColor, initials } from "@/lib/format";
 
 const THEMES: { id: Theme; label: string; icon: IconName }[] = [
   { id: "system", label: "Tizim", icon: "monitor" },
@@ -93,6 +95,10 @@ export function SideMenu({ onClose }: { onClose: () => void }) {
   const [newChat, setNewChat] = useState<NewChatMode | null>(null);
   const [editing, setEditing] = useState(false);
   const meVersion = useApp((s) => s.meVersion);
+  const [accounts] = useState<AccountEntry[]>(readAccounts);
+  const [current] = useState(activeSlot);
+  const others = accounts.filter((a) => a.slot !== current);
+  const free = nextFreeSlot(accounts);
   const me = useApp((s) => s.me);
   const theme = useApp((s) => s.theme);
   const setTheme = useApp((s) => s.setTheme);
@@ -132,6 +138,30 @@ export function SideMenu({ onClose }: { onClose: () => void }) {
             </span>
           </button>
         )}
+        {others.map((a) => (
+          <button key={a.slot} role="menuitem" className={item} title="Shu akkauntga o'tish" onClick={() => switchToSlot(a.slot)}>
+            <span
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white"
+              style={{ background: avatarColor(a.id) }}
+              aria-hidden
+            >
+              {initials(a.name)}
+            </span>
+            <span className="min-w-0 flex-1 truncate">{a.name}</span>
+          </button>
+        ))}
+        <button
+          role="menuitem"
+          className={`${item} text-muted disabled:opacity-50`}
+          disabled={free === null}
+          title={free === null ? `Ko'pi bilan ${MAX_ACCOUNTS} ta akkaunt` : undefined}
+          onClick={() => free !== null && switchToSlot(free)}
+        >
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center text-lg" aria-hidden>
+            +
+          </span>
+          Akkaunt qo&apos;shish
+        </button>
         <div className="my-1 border-t border-border" />
         <button role="menuitem" className={item} onClick={() => setNewChat("contacts")}>
           <Icon name="user" size={18} />

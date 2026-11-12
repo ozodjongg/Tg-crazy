@@ -1,4 +1,5 @@
 import type { TelegramClient } from "@mtcute/web";
+import { activeSlot, storageName } from "./accounts";
 
 const API_ID = Number(process.env.NEXT_PUBLIC_TG_API_ID ?? "");
 const API_HASH = process.env.NEXT_PUBLIC_TG_API_HASH ?? "";
@@ -30,7 +31,8 @@ export function getClient(): Promise<TelegramClient> {
       new TelegramClient({
         apiId: API_ID,
         apiHash: API_HASH,
-        storage: "tg-crazy",
+        // Har bir akkaunt (slot) o'z xotirasida
+        storage: storageName(activeSlot()),
       }),
   );
   return clientPromise;
