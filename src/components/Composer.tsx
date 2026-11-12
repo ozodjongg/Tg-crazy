@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { applyCompletion, findTrigger, type Trigger } from "@/lib/autocomplete";
-import { insertAt } from "@/lib/emoji";
+import { insertAt, rememberEmoji, searchEmoji } from "@/lib/emoji";
 import { wrapSelection } from "@/lib/markdown";
 import { pickForAi } from "@/lib/messages";
 import * as tg from "@/lib/telegram/api";
@@ -87,6 +87,8 @@ export function Composer() {
             ),
           () => done([]),
         );
+      } else if (t.kind === "emoji") {
+        done(searchEmoji(t.query, 12).map((e) => ({ key: e.emoji, value: e.emoji, title: e.label, glyph: e.emoji })));
       } else {
         done([]);
       }
@@ -101,6 +103,7 @@ export function Composer() {
 
   function pickSuggestion(s: Suggestion) {
     if (!trigger) return;
+    if (trigger.kind === "emoji") rememberEmoji(s.value);
     const next = applyCompletion(text, trigger, s.value);
     setDraft(next.text);
     setCursor(next.cursor);
@@ -231,6 +234,7 @@ export function Composer() {
           items={suggestions}
           active={active}
           label={trigger?.kind === "command" ? "Bot buyruqlari" : trigger?.kind === "emoji" ? "Emoji" : "Eslatish"}
+          compact={trigger?.kind === "emoji"}
           onPick={pickSuggestion}
           onHover={setActive}
         />

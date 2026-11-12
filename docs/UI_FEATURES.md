@@ -59,7 +59,7 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Funksiya | Holat |
 |---|---|
 | Emoji paneli (toifalar, so'nggilar) | ✅ |
-| Emoji qidiruvi (nomi bo'yicha) | ⬜ |
+| Emoji qidiruvi: panelda va yozishda `:yurak` (o'zbekcha/inglizcha, lotin/kirill) | ✅ |
 | Formatlash: **qalin**, __kursiv__, `kod`, ~~o'chirilgan~~, \|\|spoiler\|\| va Ctrl+B / Ctrl+I | ✅ |
 | Rasmni joylashtirish (Ctrl+V) | ✅ |
 | Qoralamalarni saqlash (chat almashtirganda yo'qolmaydi, Telegram bilan sinxron) | ✅ |

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { EMOJI_GROUPS, recentEmoji, rememberEmoji } from "@/lib/emoji";
+import { EMOJI_GROUPS, recentEmoji, rememberEmoji, searchEmoji } from "@/lib/emoji";
 import * as tg from "@/lib/telegram/api";
 import { Icon } from "./Icon";
 import { IosSticker } from "./IosSticker";
@@ -84,6 +84,8 @@ export function EmojiPanel({
 }: { onEmoji: (emoji: string) => void; onSticker: (key: string) => void; onClose: () => void }) {
   const [tab, setTab] = useState<"emoji" | "stickers">("emoji");
   const [group, setGroup] = useState("recent");
+  const [query, setQuery] = useState("");
+  const found = query.trim() ? searchEmoji(query, 64) : null;
   const [recent, setRecent] = useState<string[]>(() => recentEmoji());
   const groups = recent.length
     ? [{ id: "recent", label: "So'nggilar", icon: "🕘", emojis: recent.join(" ") }, ...EMOJI_GROUPS]
@@ -123,9 +125,19 @@ export function EmojiPanel({
           <Stickers onSticker={(key) => (onSticker(key), onClose())} />
         ) : (
           <>
-            <p className="px-3 pb-1 pt-2 text-xs font-medium text-muted">{active.label}</p>
+            <div className="px-2 pt-2">
+              <input
+                className="w-full rounded-full border border-border bg-panel px-3 py-1.5 text-sm placeholder:text-muted focus:border-accent"
+                type="search"
+                placeholder="Emoji qidirish (yurak, kulish, olov…)"
+                aria-label="Emoji qidirish"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+            <p className="px-3 pb-1 pt-2 text-xs font-medium text-muted">{found ? "Qidiruv natijalari" : active.label}</p>
             <div className="thin-scroll grid flex-1 grid-cols-8 content-start gap-0.5 overflow-y-auto px-2">
-              {active.emojis.split(" ").map((e, i) => (
+              {(found ? found.map((f) => f.emoji) : active.emojis.split(" ")).map((e, i) => (
                 <button
                   key={`${e}-${i}`}
                   className="flex aspect-square items-center justify-center rounded-lg text-2xl hover:bg-hover"
@@ -139,6 +151,7 @@ export function EmojiPanel({
                   {e}
                 </button>
               ))}
+              {found?.length === 0 && <p className="col-span-8 p-4 text-center text-sm text-muted">Hech narsa topilmadi</p>}
             </div>
             <div className="flex justify-between border-t border-border px-1 py-1">
               {groups.map((g) => (
@@ -146,9 +159,12 @@ export function EmojiPanel({
                   key={g.id}
                   title={g.label}
                   aria-label={g.label}
-                  aria-pressed={active.id === g.id}
-                  className={`flex h-8 w-8 items-center justify-center rounded-lg text-lg ${active.id === g.id ? "bg-accent-soft" : "opacity-60 hover:opacity-100"}`}
-                  onClick={() => setGroup(g.id)}
+                  aria-pressed={!found && active.id === g.id}
+                  className={`flex h-8 w-8 items-center justify-center rounded-lg text-lg ${!found && active.id === g.id ? "bg-accent-soft" : "opacity-60 hover:opacity-100"}`}
+                  onClick={() => {
+                    setGroup(g.id);
+                    setQuery("");
+                  }}
                 >
                   {g.icon}
                 </button>
