@@ -552,6 +552,22 @@ export async function sendFile(
   return item(sent);
 }
 
+/** Ovozli xabar (Ogg/Opus). */
+export async function sendVoice(
+  chatId: number,
+  file: File,
+  opts: { duration: number; waveform: number[]; replyTo?: number; onProgress?: (fraction: number) => void },
+): Promise<MessageItem> {
+  const client = await getClient();
+  const { InputMedia } = await import("@mtcute/web");
+  const media = InputMedia.voice(file, { duration: opts.duration, waveform: opts.waveform, fileMime: "audio/ogg" });
+  const sent = await client.sendMedia(chatId, media, {
+    replyTo: opts.replyTo,
+    progressCallback: (done, total) => opts.onProgress?.(total > 0 ? done / total : 0),
+  });
+  return item(sent);
+}
+
 /** So'rovnomada ovoz berish; answers bo'sh bo'lsa ovoz qaytarib olinadi. */
 export async function votePoll(chatId: number, messageId: number, answers: string[]): Promise<PollInfo> {
   const client = await getClient();

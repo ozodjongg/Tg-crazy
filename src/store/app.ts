@@ -95,6 +95,7 @@ interface AppState {
   sendFile: (file: File, caption: string) => Promise<void>;
   sendSticker: (key: string) => Promise<void>;
   sendGif: (key: string) => Promise<void>;
+  sendVoice: (file: File, duration: number, waveform: number[]) => Promise<void>;
   /** Bitta chatdagi bir yoki bir nechta xabarni o'chiradi. */
   deleteMessages: (chatId: number, ids: number[], revoke: boolean) => Promise<void>;
   /** Bitta chatdagi xabarlarni (sana tartibida) boshqa chatga uzatadi. */
@@ -514,6 +515,28 @@ export const useApp = create<AppState>((set, get) => {
         handleIncoming(msg);
       } catch (err) {
         set({ error: errorText(err) });
+      }
+    },
+
+    async sendVoice(file, duration, waveform) {
+      const { activeChatId: chatId, replyTo } = get();
+      if (chatId === null) return;
+      set({ upload: { name: "Ovozli xabar", fraction: 0 }, error: null });
+      try {
+        const msg = await tg.sendVoice(chatId, file, {
+          duration,
+          waveform,
+          replyTo: replyTo?.id,
+          onProgress: (fraction) => {
+            if (get().upload) set({ upload: { name: "Ovozli xabar", fraction } });
+          },
+        });
+        set({ replyTo: null });
+        handleIncoming(msg);
+      } catch (err) {
+        set({ error: errorText(err) });
+      } finally {
+        set({ upload: null });
       }
     },
 

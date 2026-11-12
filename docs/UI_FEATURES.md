@@ -66,7 +66,7 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Stiker paneli (o'rnatilgan to'plamlar) | ✅ |
 | Ovozsiz yuborish | ✅ |
 | Vaqtga rejalashtirish va rejalashtirilgan xabarlar ro'yxati | ⬜ |
-| Ovozli xabar yozish (mikrofon) | ⬜ |
+| Ovozli xabar yozish: jonli to'lqin, taymer, bekor qilish; Chrome WebM → Ogg/Opus qayta o'rash | ✅ |
 | @mention (username yoki ism bilan) va bot buyruqlari avtoto'ldirish: ↑/↓, Enter/Tab, Esc | ✅ |
 | GIF: saqlangan GIF'lar va qidiruv (@gif orqali), cheksiz aylantirish | ✅ |
 

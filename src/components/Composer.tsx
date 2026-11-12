@@ -15,6 +15,8 @@ import { EmojiPanel } from "./EmojiPanel";
 import { Icon } from "./Icon";
 import { PopupMenu } from "./PopupMenu";
 import { Suggestions, type Suggestion } from "./Suggestions";
+import { VoiceBar } from "./VoiceBar";
+import { voiceSupported } from "@/lib/voice/recorder";
 
 const iconButton =
   "mb-0.5 flex h-9 shrink-0 items-center justify-center rounded-full px-2.5 text-muted hover:bg-hover hover:text-text disabled:opacity-40 disabled:hover:bg-transparent";
@@ -38,6 +40,9 @@ export function Composer() {
   const [attach, setAttach] = useState<File | null>(null);
   const sendSticker = useApp((s) => s.sendSticker);
   const sendGif = useApp((s) => s.sendGif);
+  const sendVoice = useApp((s) => s.sendVoice);
+  const showNotice = useApp((s) => s.showNotice);
+  const [recording, setRecording] = useState(false);
   const [sendMenu, setSendMenu] = useState<{ x: number; y: number } | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -239,95 +244,115 @@ export function Composer() {
           onPick={pickSuggestion}
           onHover={setActive}
         />
-        <div className="flex items-end gap-2">
-          <div className="flex min-w-0 flex-1 items-end rounded-3xl border border-border bg-bg py-1 pl-1 pr-1 shadow-sm focus-within:border-accent">
-            <input ref={fileRef} type="file" className="hidden" onChange={(e) => onFiles(e.target.files)} />
-            <div className="relative">
+        {recording ? (
+          <VoiceBar
+            onSend={(v) => void sendVoice(v.file, v.duration, v.waveform)}
+            onClose={() => setRecording(false)}
+            onError={(t) => showNotice(t)}
+          />
+        ) : (
+          <div className="flex items-end gap-2">
+            <div className="flex min-w-0 flex-1 items-end rounded-3xl border border-border bg-bg py-1 pl-1 pr-1 shadow-sm focus-within:border-accent">
+              <input ref={fileRef} type="file" className="hidden" onChange={(e) => onFiles(e.target.files)} />
+              <div className="relative">
+                <button
+                  className={iconButton}
+                  title="Emoji va stikerlar"
+                  aria-label="Emoji va stikerlar"
+                  aria-expanded={emojiOpen}
+                  disabled={busy}
+                  onClick={() => setEmojiOpen((v) => !v)}
+                >
+                  <span className="text-lg leading-none" aria-hidden>🙂</span>
+                </button>
+                {emojiOpen && (
+                  <EmojiPanel
+                    onEmoji={insert}
+                    onSticker={(key) => void sendSticker(key)}
+                    onGif={(key) => void sendGif(key)}
+                    onClose={() => setEmojiOpen(false)}
+                  />
+                )}
+              </div>
               <button
                 className={iconButton}
-                title="Emoji va stikerlar"
-                aria-label="Emoji va stikerlar"
-                aria-expanded={emojiOpen}
-                disabled={busy}
-                onClick={() => setEmojiOpen((v) => !v)}
+                title="Fayl yoki rasm biriktirish"
+                aria-label="Fayl yoki rasm biriktirish"
+                disabled={busy || editing !== null}
+                onClick={() => fileRef.current?.click()}
               >
-                <span className="text-lg leading-none" aria-hidden>🙂</span>
+                <Icon name="clip" />
               </button>
-              {emojiOpen && (
-                <EmojiPanel
-                  onEmoji={insert}
-                  onSticker={(key) => void sendSticker(key)}
-                  onGif={(key) => void sendGif(key)}
-                  onClose={() => setEmojiOpen(false)}
-                />
+              <textarea
+                ref={ref}
+                className="max-h-40 min-w-0 flex-1 resize-none bg-transparent px-1 py-2 placeholder:text-muted"
+                rows={1}
+                placeholder={editing ? "Xabarni tahrirlang…" : "Xabar yozing…  (**qalin**, __kursiv__, `kod`)"}
+                aria-label="Xabar matni"
+                value={text}
+                onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
+                onChange={(e) => {
+                  setDraft(e.target.value);
+                  setCursor(e.target.selectionStart);
+                  if (e.target.value && !editing) notifyTyping();
+                }}
+                onKeyDown={onKeyDown}
+                onPaste={(e) => {
+                  const file = [...e.clipboardData.files][0];
+                  if (file && !editing) {
+                    e.preventDefault();
+                    setAttach(file);
+                  }
+                }}
+              />
+              {aiReady && !editing && (
+                <button
+                  className={iconButton}
+                  title="AI javob qoralamasi"
+                  aria-label="AI javob qoralamasi"
+                  onClick={() => openAi({ kind: "draft", messages: pickForAi(useApp.getState().messages, 12_000, 30) })}
+                >
+                  <Icon name="sparkle" />
+                </button>
               )}
-            </div>
-            <button
-              className={iconButton}
-              title="Fayl yoki rasm biriktirish"
-              aria-label="Fayl yoki rasm biriktirish"
-              disabled={busy || editing !== null}
-              onClick={() => fileRef.current?.click()}
-            >
-              <Icon name="clip" />
-            </button>
-            <textarea
-              ref={ref}
-              className="max-h-40 min-w-0 flex-1 resize-none bg-transparent px-1 py-2 placeholder:text-muted"
-              rows={1}
-              placeholder={editing ? "Xabarni tahrirlang…" : "Xabar yozing…  (**qalin**, __kursiv__, `kod`)"}
-              aria-label="Xabar matni"
-              value={text}
-              onSelect={(e) => setCursor(e.currentTarget.selectionStart)}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                setCursor(e.target.selectionStart);
-                if (e.target.value && !editing) notifyTyping();
-              }}
-              onKeyDown={onKeyDown}
-              onPaste={(e) => {
-                const file = [...e.clipboardData.files][0];
-                if (file && !editing) {
-                  e.preventDefault();
-                  setAttach(file);
-                }
-              }}
-            />
-            {aiReady && !editing && (
               <button
-                className={iconButton}
-                title="AI javob qoralamasi"
-                aria-label="AI javob qoralamasi"
-                onClick={() => openAi({ kind: "draft", messages: pickForAi(useApp.getState().messages, 12_000, 30) })}
+                className={`${iconButton} text-xs font-medium`}
+                title="Yozilgan matnni lotin ↔ kirillga o'girish"
+                aria-label="Yozilgan matnni lotin yoki kirillga o'girish"
+                disabled={empty}
+                onClick={() => setDraft(toggleScript(text))}
               >
-                <Icon name="sparkle" />
+                Aa↔Аа
+              </button>
+            </div>
+            {empty && !editing && voiceSupported() ? (
+              <button
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-text hover:bg-accent-hover disabled:opacity-40"
+                aria-label="Ovozli xabar yozish"
+                title="Ovozli xabar yozish"
+                disabled={busy}
+                onClick={() => setRecording(true)}
+              >
+                <Icon name="mic" size={22} />
+              </button>
+            ) : (
+              <button
+                onContextMenu={(e) => {
+                  if (editing || !text.trim()) return;
+                  e.preventDefault();
+                  setSendMenu({ x: e.clientX, y: e.clientY });
+                }}
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-text hover:bg-accent-hover disabled:opacity-40 disabled:hover:bg-accent"
+                aria-label={editing ? "Saqlash" : "Yuborish"}
+                title={editing ? "Saqlash (Enter)" : "Yuborish (Enter) · o'ng tugma — ovozsiz"}
+                disabled={empty || busy}
+                onClick={() => void submit()}
+              >
+                <Icon name={editing ? "check" : "send"} size={22} />
               </button>
             )}
-            <button
-              className={`${iconButton} text-xs font-medium`}
-              title="Yozilgan matnni lotin ↔ kirillga o'girish"
-              aria-label="Yozilgan matnni lotin yoki kirillga o'girish"
-              disabled={empty}
-              onClick={() => setDraft(toggleScript(text))}
-            >
-              Aa↔Аа
-            </button>
           </div>
-          <button
-            onContextMenu={(e) => {
-              if (editing || !text.trim()) return;
-              e.preventDefault();
-              setSendMenu({ x: e.clientX, y: e.clientY });
-            }}
-            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-text hover:bg-accent-hover disabled:opacity-40 disabled:hover:bg-accent"
-            aria-label={editing ? "Saqlash" : "Yuborish"}
-            title={editing ? "Saqlash (Enter)" : "Yuborish (Enter) · o'ng tugma — ovozsiz"}
-            disabled={empty || busy}
-            onClick={() => void submit()}
-          >
-            <Icon name={editing ? "check" : "send"} size={22} />
-          </button>
-        </div>
+        )}
       </div>
       {sendMenu && (
         <PopupMenu
