@@ -358,6 +358,59 @@ export async function savePrivacy(tlKey: string, state: PrivacyState): Promise<v
   });
 }
 
+// ---- Faol seanslar ----
+
+export interface Session {
+  /** Seans kaliti (Long → satr) */
+  id: string;
+  current: boolean;
+  device: string;
+  app: string;
+  place: string;
+  ip: string;
+  /** ms */
+  active: number;
+  created: number;
+  official: boolean;
+}
+
+const sessionHashes = new Map<string, tl.Long>();
+
+export async function loadSessions(): Promise<Session[]> {
+  const client = await getClient();
+  const res = await client.call({ _: "account.getAuthorizations" });
+  return res.authorizations
+    .map((a) => {
+      const id = a.hash.toString();
+      sessionHashes.set(id, a.hash);
+      return {
+        id,
+        current: !!a.current,
+        device: [a.deviceModel, [a.platform, a.systemVersion].filter(Boolean).join(" ")].filter(Boolean).join(" · "),
+        app: [a.appName, a.appVersion].filter(Boolean).join(" "),
+        place: [a.region, a.country].filter(Boolean).join(", "),
+        ip: a.ip,
+        active: a.dateActive * 1000,
+        created: a.dateCreated * 1000,
+        official: !!a.officialApp,
+      };
+    })
+    .sort((a, b) => Number(b.current) - Number(a.current) || b.active - a.active);
+}
+
+export async function terminateSession(id: string): Promise<void> {
+  const hash = sessionHashes.get(id);
+  if (!hash) throw new Error("Seans topilmadi");
+  const client = await getClient();
+  await client.call({ _: "account.resetAuthorization", hash });
+}
+
+/** Joriy seansdan boshqa hammasini tugatadi. */
+export async function terminateOtherSessions(): Promise<void> {
+  const client = await getClient();
+  await client.call({ _: "auth.resetAuthorizations" });
+}
+
 // ---- Kontaktlar va yangi chatlar ----
 
 export interface Contact {

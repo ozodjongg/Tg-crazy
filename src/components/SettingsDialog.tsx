@@ -5,6 +5,7 @@ import { TEXT_SIZES, usePrefs, type TextSize, type Wallpaper } from "@/store/pre
 import { Dialog } from "./Dialog";
 import { Icon } from "./Icon";
 import { PrivacyDialog } from "./PrivacyDialog";
+import { SessionsDialog } from "./SessionsDialog";
 
 const SIZES: { id: TextSize; label: string }[] = [
   { id: "sm", label: "Kichik" },
@@ -27,7 +28,7 @@ function notificationState(): NotificationPermission | "unsupported" {
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const prefs = usePrefs();
   const [permission, setPermission] = useState(notificationState);
-  const [page, setPage] = useState<"main" | "privacy">("main");
+  const [page, setPage] = useState<"main" | "privacy" | "sessions">("main");
 
   async function toggleNotifications(on: boolean) {
     if (on && permission === "default") {
@@ -41,6 +42,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const enabled = prefs.notifications && permission === "granted";
 
   if (page === "privacy") return <PrivacyDialog onBack={() => setPage("main")} onClose={onClose} />;
+  if (page === "sessions") return <SessionsDialog onBack={() => setPage("main")} onClose={onClose} />;
 
   return (
     <Dialog title="Sozlamalar" onClose={onClose}>
@@ -115,6 +117,11 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           <button className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-hover" onClick={() => setPage("privacy")}>
             <Icon name="eye" size={18} className="text-muted" />
             <span className="flex-1">Maxfiylik</span>
+            <span className="text-muted" aria-hidden>›</span>
+          </button>
+          <button className="flex w-full items-center gap-3 border-t border-border px-3 py-2.5 text-left hover:bg-hover" onClick={() => setPage("sessions")}>
+            <Icon name="monitor" size={18} className="text-muted" />
+            <span className="flex-1">Faol seanslar</span>
             <span className="text-muted" aria-hidden>›</span>
           </button>
         </div>
