@@ -431,6 +431,93 @@ export async function sendSticker(chatId: number, key: string, replyTo?: number)
   return item(await client.sendMedia(chatId, s.inputMedia, { replyTo }));
 }
 
+// ---- GIF ----
+
+type DocumentObj = InstanceType<(typeof import("@mtcute/web"))["Document"]>;
+
+const gifs = new Map<string, DocumentObj>();
+const gifUrls = new Map<string, Promise<string>>();
+
+export interface GifRef {
+  key: string;
+  width: number;
+  height: number;
+}
+
+export interface GifPage {
+  items: GifRef[];
+  /** Keyingi sahifa uchun; null — boshqa natija yo'q */
+  next: string | null;
+}
+
+async function toGifRefs(docs: tl.TypeDocument[]): Promise<GifRef[]> {
+  const { Document } = await import("@mtcute/web");
+  const out: GifRef[] = [];
+  for (const raw of docs) {
+    if (raw._ !== "document") continue;
+    const doc = new Document(raw);
+    const key = doc.uniqueFileId;
+    gifs.set(key, doc);
+    const size = raw.attributes.find((a) => a._ === "documentAttributeVideo" || a._ === "documentAttributeImageSize") as
+      | { w: number; h: number }
+      | undefined;
+    out.push({ key, width: size?.w || 1, height: size?.h || 1 });
+  }
+  return out;
+}
+
+/** Saqlangan GIF'lar (so'rov bo'sh bo'lganda ko'rsatiladi). */
+export async function loadSavedGifs(): Promise<GifRef[]> {
+  const client = await getClient();
+  const { Long } = await import("@mtcute/web");
+  const res = await client.call({ _: "messages.getSavedGifs", hash: Long.ZERO });
+  return res._ === "messages.savedGifs" ? toGifRefs(res.gifs) : [];
+}
+
+let gifBot: Promise<tl.TypeInputUser> | null = null;
+
+/** GIF qidiruvi — Telegram'ning rasmiy @gif inline boti orqali. */
+export async function searchGifs(chatId: number, query: string, offset = ""): Promise<GifPage> {
+  const client = await getClient();
+  if (!gifBot) {
+    gifBot = client.resolveUser("gif");
+    gifBot.catch(() => (gifBot = null));
+  }
+  const res = await client.call({
+    _: "messages.getInlineBotResults",
+    bot: await gifBot,
+    peer: await client.resolvePeer(chatId),
+    query,
+    offset,
+  });
+  const docs = res.results.flatMap((r) => (r._ === "botInlineMediaResult" && r.document ? [r.document] : []));
+  return { items: await toGifRefs(docs), next: res.nextOffset || null };
+}
+
+/** GIF videosi (mp4) uchun blob-URL. */
+export function gifUrl(key: string): Promise<string> {
+  let p = gifUrls.get(key);
+  if (!p) {
+    p = (async () => {
+      const doc = gifs.get(key);
+      if (!doc) throw new Error("GIF topilmadi");
+      const client = await getClient();
+      const bytes = await client.downloadAsBuffer(doc);
+      return URL.createObjectURL(new Blob([bytes as BlobPart], { type: doc.mimeType || "video/mp4" }));
+    })();
+    gifUrls.set(key, p);
+    p.catch(() => gifUrls.delete(key));
+  }
+  return p;
+}
+
+export async function sendGif(chatId: number, key: string, replyTo?: number): Promise<MessageItem> {
+  const doc = gifs.get(key);
+  if (!doc) throw new Error("GIF topilmadi");
+  const client = await getClient();
+  return item(await client.sendMedia(chatId, doc.inputMedia, { replyTo }));
+}
+
 /** revoke=true — hamma uchun o'chiradi. */
 export async function deleteMessages(chatId: number, ids: number[], revoke: boolean): Promise<void> {
   const client = await getClient();

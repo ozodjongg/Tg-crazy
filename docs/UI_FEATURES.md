@@ -68,7 +68,7 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Vaqtga rejalashtirish va rejalashtirilgan xabarlar ro'yxati | ⬜ |
 | Ovozli xabar yozish (mikrofon) | ⬜ |
 | @mention (username yoki ism bilan) va bot buyruqlari avtoto'ldirish: ↑/↓, Enter/Tab, Esc | ✅ |
-| GIF qidiruv | ⬜ |
+| GIF: saqlangan GIF'lar va qidiruv (@gif orqali), cheksiz aylantirish | ✅ |
 
 ## V5 — Ilova darajasi
 

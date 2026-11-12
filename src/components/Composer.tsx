@@ -37,6 +37,7 @@ export function Composer() {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [attach, setAttach] = useState<File | null>(null);
   const sendSticker = useApp((s) => s.sendSticker);
+  const sendGif = useApp((s) => s.sendGif);
   const [sendMenu, setSendMenu] = useState<{ x: number; y: number } | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -256,6 +257,7 @@ export function Composer() {
                 <EmojiPanel
                   onEmoji={insert}
                   onSticker={(key) => void sendSticker(key)}
+                  onGif={(key) => void sendGif(key)}
                   onClose={() => setEmojiOpen(false)}
                 />
               )}
