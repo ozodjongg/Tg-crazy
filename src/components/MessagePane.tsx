@@ -43,19 +43,22 @@ function EmptyState() {
   );
 }
 
-function DeleteDialog({ msg, canChoose, onClose }: { msg: MessageItem; canChoose: boolean; onClose: () => void }) {
-  const deleteMessage = useApp((s) => s.deleteMessage);
+function DeleteDialog({ msgs, canChoose, onClose }: { msgs: MessageItem[]; canChoose: boolean; onClose: () => void }) {
+  const deleteMessages = useApp((s) => s.deleteMessages);
   const [busy, setBusy] = useState(false);
+  const many = msgs.length > 1;
   const run = async (revoke: boolean) => {
     setBusy(true);
-    await deleteMessage(msg, revoke).catch(() => {});
+    await deleteMessages(msgs[0].chatId, msgs.map((m) => m.id), revoke).catch(() => {});
     onClose();
   };
   return (
-    <Dialog title="Xabarni o'chirish" onClose={onClose}>
+    <Dialog title={many ? `${msgs.length} ta xabarni o'chirish` : "Xabarni o'chirish"} onClose={onClose}>
       <p className="text-muted">
-        {canChoose ? "Xabar kim uchun o'chirilsin?" : "Xabar barcha ishtirokchilar uchun o'chiriladi."} Bu amalni
-        qaytarib bo&apos;lmaydi.
+        {canChoose
+          ? `${many ? "Xabarlar" : "Xabar"} kim uchun o'chirilsin?`
+          : `${many ? "Xabarlar" : "Xabar"} barcha ishtirokchilar uchun o'chiriladi.`}{" "}
+        Bu amalni qaytarib bo&apos;lmaydi.
       </p>
       <div className="mt-5 flex flex-wrap justify-end gap-2">
         <button className={secondaryButton} disabled={busy} onClick={onClose}>
@@ -71,6 +74,47 @@ function DeleteDialog({ msg, canChoose, onClose }: { msg: MessageItem; canChoose
         </button>
       </div>
     </Dialog>
+  );
+}
+
+/** Tanlangan xabarlar matni (sana tartibida, guruhda yuboruvchi ismi bilan) — nusxa uchun. */
+function selectionText(msgs: MessageItem[], withNames: boolean): string {
+  return msgs
+    .map((m) => {
+      const body = m.text || itemPreview(m);
+      return withNames && m.senderName ? `${m.senderName}: ${body}` : body;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function SelectionBar({
+  count, onCancel, onCopy, onForward, onDelete,
+}: { count: number; onCancel: () => void; onCopy: () => void; onForward: () => void; onDelete: () => void }) {
+  const action = "flex h-10 items-center gap-1.5 rounded-full px-3 text-sm font-medium hover:bg-hover disabled:opacity-40";
+  return (
+    <div className="mx-auto flex max-w-3xl items-center gap-1 px-3 pb-3 pt-1" role="toolbar" aria-label="Tanlangan xabarlar">
+      <div className="flex flex-1 items-center gap-1 rounded-3xl border border-border bg-bg px-1.5 py-1 shadow-sm">
+        <button className="flex h-10 w-10 items-center justify-center rounded-full text-muted hover:bg-hover hover:text-text" aria-label="Tanlashni bekor qilish" onClick={onCancel}>
+          <Icon name="close" />
+        </button>
+        <span className="flex-1 truncate text-sm font-medium" aria-live="polite">
+          {count} ta tanlandi
+        </span>
+        <button className={action} onClick={onCopy} disabled={count === 0}>
+          <Icon name="copy" size={18} />
+          <span className="hidden sm:inline">Nusxa</span>
+        </button>
+        <button className={`${action} text-accent`} onClick={onForward} disabled={count === 0}>
+          <Icon name="forward" size={18} />
+          <span className="hidden sm:inline">Uzatish</span>
+        </button>
+        <button className={`${action} text-danger`} onClick={onDelete} disabled={count === 0}>
+          <Icon name="trash" size={18} />
+          <span className="hidden sm:inline">O&apos;chirish</span>
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -106,8 +150,10 @@ export function MessagePane() {
   // Alohida o'girilgan xabarlar ("chatId:msgId")
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
   const [menu, setMenu] = useState<{ msg: MessageItem; x: number; y: number } | null>(null);
-  const [forwarding, setForwarding] = useState<MessageItem | null>(null);
-  const [deleting, setDeleting] = useState<MessageItem | null>(null);
+  const [forwarding, setForwarding] = useState<MessageItem[] | null>(null);
+  const [deleting, setDeleting] = useState<MessageItem[] | null>(null);
+  // Ko'p tanlash rejimi: null — o'chiq. Chat almashganda bekor bo'ladi.
+  const [selection, setSelection] = useState<{ chatId: number; ids: ReadonlySet<number> } | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
   const byId = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
@@ -180,6 +226,16 @@ export function MessagePane() {
     return () => clearTimeout(timer);
   }, [error, clearError]);
 
+  // Esc — tanlashni bekor qiladi (ochiq dialog yoki menyu bo'lmasa)
+  useEffect(() => {
+    if (!selection) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !forwarding && !deleting && !menu) setSelection(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selection, forwarding, deleting, menu]);
+
   function onScroll() {
     const el = scrollRef.current;
     if (!el) return;
@@ -207,6 +263,19 @@ export function MessagePane() {
   const jumpTo = (id: number) => void storeJumpTo(id);
   const currentPinned = pinned[pinnedIndex] ?? null;
 
+  const selected = selection?.chatId === activeChatId ? selection.ids : null;
+  const selectedMsgs = selected ? messages.filter((m) => selected.has(m.id)) : [];
+  /** Albom bitta qator bo'lib ko'rinadi — uni tanlash barcha qismlarini tanlaydi */
+  const idsOf = (msg: MessageItem) => rows.find((r) => r.msg.id === msg.id)?.album?.map((m) => m.id) ?? [msg.id];
+
+  function toggleSelect(ids: number[]) {
+    const base = selected ?? new Set<number>();
+    const next = new Set(base);
+    const on = ids.some((id) => !base.has(id));
+    ids.forEach((id) => (on ? next.add(id) : next.delete(id)));
+    setSelection(next.size ? { chatId: activeChatId!, ids: next } : null);
+  }
+
   function actionsFor(msg: MessageItem): MenuAction[] {
     const list: MenuAction[] = [{ key: "reply", label: "Javob berish", icon: "reply", run: () => setReplyTo(msg) }];
     if (msg.text) {
@@ -227,8 +296,9 @@ export function MessagePane() {
     if (msg.outgoing && msg.text) {
       list.push({ key: "edit", label: "Tahrirlash", icon: "edit", run: () => setEditing(msg) });
     }
-    list.push({ key: "forward", label: "Uzatish", icon: "forward", run: () => setForwarding(msg) });
-    list.push({ key: "delete", label: "O'chirish", icon: "trash", danger: true, run: () => setDeleting(msg) });
+    list.push({ key: "forward", label: "Uzatish", icon: "forward", run: () => setForwarding([msg]) });
+    list.push({ key: "select", label: "Tanlash", icon: "checkCircle", run: () => toggleSelect(idsOf(msg)) });
+    list.push({ key: "delete", label: "O'chirish", icon: "trash", danger: true, run: () => setDeleting([msg]) });
     return list;
   }
 
@@ -376,6 +446,8 @@ export function MessagePane() {
                     onMenu={(m, x, y) => setMenu({ msg: m, x, y })}
                     onReact={(m, emoji) => void react(m, emoji)}
                     onJumpTo={jumpTo}
+                    selected={selected ? (album ?? [msg]).every((m) => selected.has(m.id)) : undefined}
+                    onSelect={() => toggleSelect(idsOf(msg))}
                   />
                 </Fragment>
               );
@@ -399,7 +471,20 @@ export function MessagePane() {
         </p>
       )}
       <div className="chat-wallpaper">
-        <Composer key={activeChatId} />
+        {selected ? (
+          <SelectionBar
+            count={selectedMsgs.length}
+            onCancel={() => setSelection(null)}
+            onCopy={() => {
+              void navigator.clipboard.writeText(selectionText(selectedMsgs, kind !== "user"));
+              setSelection(null);
+            }}
+            onForward={() => setForwarding(selectedMsgs)}
+            onDelete={() => setDeleting(selectedMsgs)}
+          />
+        ) : (
+          <Composer key={activeChatId} />
+        )}
       </div>
 
       {dragOver && (
@@ -425,8 +510,25 @@ export function MessagePane() {
           {notice}
         </p>
       )}
-      {forwarding && <ForwardDialog msg={forwarding} onClose={() => setForwarding(null)} />}
-      {deleting && <DeleteDialog msg={deleting} canChoose={canChooseDelete} onClose={() => setDeleting(null)} />}
+      {forwarding && (
+        <ForwardDialog
+          msgs={forwarding}
+          onClose={() => {
+            setForwarding(null);
+            setSelection(null);
+          }}
+        />
+      )}
+      {deleting && (
+        <DeleteDialog
+          msgs={deleting}
+          canChoose={canChooseDelete}
+          onClose={() => {
+            setDeleting(null);
+            setSelection(null);
+          }}
+        />
+      )}
     </div>
   );
 }

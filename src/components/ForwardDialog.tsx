@@ -7,9 +7,9 @@ import { useApp } from "@/store/app";
 import { Avatar } from "./Avatar";
 import { Dialog } from "./Dialog";
 
-export function ForwardDialog({ msg, onClose }: { msg: MessageItem; onClose: () => void }) {
+export function ForwardDialog({ msgs, onClose }: { msgs: MessageItem[]; onClose: () => void }) {
   const chats = useApp((s) => s.chats);
-  const forwardMessage = useApp((s) => s.forwardMessage);
+  const forwardMessages = useApp((s) => s.forwardMessages);
   const openChat = useApp((s) => s.openChat);
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -22,7 +22,7 @@ export function ForwardDialog({ msg, onClose }: { msg: MessageItem; onClose: () 
   async function pick(chatId: number) {
     setBusyId(chatId);
     try {
-      await forwardMessage(msg, chatId);
+      await forwardMessages(msgs[0].chatId, msgs.map((m) => m.id), chatId);
       onClose();
       void openChat(chatId);
     } catch {
@@ -31,7 +31,7 @@ export function ForwardDialog({ msg, onClose }: { msg: MessageItem; onClose: () 
   }
 
   return (
-    <Dialog title="Kimga yuborilsin?" onClose={onClose}>
+    <Dialog title={msgs.length > 1 ? `${msgs.length} ta xabar — kimga yuborilsin?` : "Kimga yuborilsin?"} onClose={onClose}>
       <input
         className="mb-2 w-full rounded-full border border-border bg-bg px-4 py-2 text-sm placeholder:text-muted focus:border-accent"
         type="search"

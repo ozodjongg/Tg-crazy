@@ -50,7 +50,7 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Profil paneli: rasm, bio/tavsif, username, telefon, a'zolar soni | ✅ |
 | Profil panelida umumiy media: rasmlar, fayllar, havolalar, ovozlar | ✅ |
 | Guruh a'zolari ro'yxati | ✅ |
-| Xabarlarni ko'p tanlash (uzatish/o'chirish) | ⬜ |
+| Xabarlarni ko'p tanlash: uzatish, o'chirish, nusxa (Esc — bekor) | ✅ |
 | Forum mavzulari (topics) | ⬜ |
 | Kanal izohlari (comments) | ⬜ |
 

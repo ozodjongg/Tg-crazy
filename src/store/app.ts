@@ -94,8 +94,10 @@ interface AppState {
   send: (text: string, silent?: boolean) => Promise<void>;
   sendFile: (file: File, caption: string) => Promise<void>;
   sendSticker: (key: string) => Promise<void>;
-  deleteMessage: (msg: MessageItem, revoke: boolean) => Promise<void>;
-  forwardMessage: (msg: MessageItem, toChatId: number) => Promise<void>;
+  /** Bitta chatdagi bir yoki bir nechta xabarni o'chiradi. */
+  deleteMessages: (chatId: number, ids: number[], revoke: boolean) => Promise<void>;
+  /** Bitta chatdagi xabarlarni (sana tartibida) boshqa chatga uzatadi. */
+  forwardMessages: (chatId: number, ids: number[], toChatId: number) => Promise<void>;
   react: (msg: MessageItem, emoji: string) => Promise<void>;
   notifyTyping: () => void;
   /** Chat amallari (kontekst menyudan); muvaffaqiyatsiz bo'lsa holat qaytariladi. */
@@ -514,18 +516,20 @@ export const useApp = create<AppState>((set, get) => {
       }
     },
 
-    async deleteMessage(msg, revoke) {
+    async deleteMessages(chatId, ids, revoke) {
+      if (ids.length === 0) return;
       try {
-        await tg.deleteMessages(msg.chatId, [msg.id], revoke);
-        if (get().activeChatId === msg.chatId) set({ messages: removeMessages(get().messages, [msg.id]) });
+        await tg.deleteMessages(chatId, ids, revoke);
+        if (get().activeChatId === chatId) set({ messages: removeMessages(get().messages, ids) });
       } catch (err) {
         fail(err);
       }
     },
 
-    async forwardMessage(msg, toChatId) {
+    async forwardMessages(chatId, ids, toChatId) {
+      if (ids.length === 0) return;
       try {
-        const sent = await tg.forwardMessages(msg.chatId, [msg.id], toChatId);
+        const sent = await tg.forwardMessages(chatId, [...ids].sort((a, b) => a - b), toChatId);
         sent.forEach((m) => handleIncoming(m));
       } catch (err) {
         fail(err);

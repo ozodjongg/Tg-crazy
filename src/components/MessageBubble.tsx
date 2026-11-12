@@ -28,6 +28,9 @@ export interface BubbleProps {
   onReact: (msg: MessageItem, emoji: string) => void;
   onJumpTo: (id: number) => void;
   onOpenMedia: (msg: MessageItem) => void;
+  /** Ko'p tanlash rejimi: undefined — rejim o'chiq; aks holda xabar tanlanganmi */
+  selected?: boolean;
+  onSelect?: () => void;
 }
 
 function formatViews(n: number): string {
@@ -61,6 +64,7 @@ function Album({ items, onOpen }: { items: MessageItem[]; onOpen: (m: MessageIte
 
 export function MessageBubble({
   msg, album, repliedTo, inGroup, first, last, read, converted, onMenu, onReact, onJumpTo, onOpenMedia,
+  selected, onSelect,
 }: BubbleProps) {
   if (msg.service) {
     return (
@@ -69,6 +73,7 @@ export function MessageBubble({
   }
 
   const out = msg.outgoing;
+  const selecting = selected !== undefined;
   // Albomda izoh birinchi matnli xabardan olinadi
   const caption = album ? (album.find((m) => m.text) ?? msg) : msg;
   const rawText = caption.text;
@@ -126,8 +131,31 @@ export function MessageBubble({
   return (
     <li
       id={`msg-${msg.id}`}
-      className={`group flex items-end gap-2 ${out ? "flex-row-reverse" : ""} ${first ? "mt-2" : ""}`}
+      className={`group flex items-end gap-2 ${out ? "flex-row-reverse" : ""} ${first ? "mt-2" : ""} ${
+        selecting ? "-mx-2 cursor-pointer rounded-xl px-2 transition-colors" : ""
+      } ${selected ? "bg-accent/10" : ""}`}
+      // Tanlash rejimida bosish xabarni belgilaydi (media ochilmaydi, havolaga o'tilmaydi)
+      onClickCapture={
+        selecting
+          ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onSelect?.();
+            }
+          : undefined
+      }
     >
+      {selecting && (
+        <span
+          className={`mb-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
+            out ? "order-last mr-auto" : "order-first"
+          } ${selected ? "border-accent bg-accent text-accent-text" : "border-muted/60 bg-bg/70"}`}
+          aria-hidden
+        >
+          {selected && <Icon name="check" size={14} />}
+        </span>
+      )}
+      {selected && <span className="sr-only">Tanlangan</span>}
       {showAvatar &&
         (last ? <Avatar id={msg.senderId} title={msg.senderName} size={32} /> : <span className="w-8 shrink-0" />)}
       <div className={`flex min-w-0 max-w-[85%] flex-col md:max-w-[70%] ${out ? "items-end" : "items-start"}`}>
