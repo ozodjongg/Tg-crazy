@@ -16,6 +16,7 @@ import { Icon } from "./Icon";
 import { PopupMenu } from "./PopupMenu";
 import { Suggestions, type Suggestion } from "./Suggestions";
 import { VoiceBar } from "./VoiceBar";
+import { ScheduleDialog } from "./Schedule";
 import { voiceSupported } from "@/lib/voice/recorder";
 
 const iconButton =
@@ -43,6 +44,7 @@ export function Composer() {
   const sendVoice = useApp((s) => s.sendVoice);
   const showNotice = useApp((s) => s.showNotice);
   const [recording, setRecording] = useState(false);
+  const [scheduling, setScheduling] = useState(false);
   const [sendMenu, setSendMenu] = useState<{ x: number; y: number } | null>(null);
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -131,11 +133,11 @@ export function Composer() {
     if (replyTo || editing) ref.current?.focus();
   }, [replyTo, editing]);
 
-  async function submit(silent = false) {
+  async function submit(silent = false, schedule?: tg.Schedule) {
     if (!text.trim() || sending) return;
     setSending(true);
     try {
-      await send(text, silent);
+      await send(text, silent, schedule);
     } catch {
       // Xato store orqali ko'rsatiladi; matn saqlanib qoladi
     } finally {
@@ -344,7 +346,7 @@ export function Composer() {
                 }}
                 className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-accent-text hover:bg-accent-hover disabled:opacity-40 disabled:hover:bg-accent"
                 aria-label={editing ? "Saqlash" : "Yuborish"}
-                title={editing ? "Saqlash (Enter)" : "Yuborish (Enter) · o'ng tugma — ovozsiz"}
+                title={editing ? "Saqlash (Enter)" : "Yuborish (Enter) · o'ng tugma — ovozsiz yoki rejalashtirish"}
                 disabled={empty || busy}
                 onClick={() => void submit()}
               >
@@ -357,10 +359,25 @@ export function Composer() {
       {sendMenu && (
         <PopupMenu
           x={sendMenu.x - 220}
-          y={sendMenu.y - 60}
+          y={sendMenu.y - 140}
           label="Yuborish usuli"
-          actions={[{ key: "silent", label: "Ovozsiz yuborish", icon: "mute", run: () => void submit(true) }]}
+          actions={[
+            { key: "silent", label: "Ovozsiz yuborish", icon: "mute", run: () => void submit(true) },
+            { key: "schedule", label: "Rejalashtirish…", icon: "clock", run: () => setScheduling(true) },
+            ...(chatKind === "user"
+              ? [{ key: "online", label: "Onlayn bo'lganda yuborish", icon: "user" as const, run: () => void submit(false, "online") }]
+              : []),
+          ]}
           onClose={() => setSendMenu(null)}
+        />
+      )}
+      {scheduling && (
+        <ScheduleDialog
+          onClose={() => setScheduling(false)}
+          onPick={(ts) => {
+            setScheduling(false);
+            void submit(false, ts);
+          }}
         />
       )}
       {attach && (

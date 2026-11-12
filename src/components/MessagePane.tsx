@@ -16,6 +16,7 @@ import { Logo } from "./Logo";
 import { Lightbox } from "./MediaView";
 import { MessageBubble } from "./MessageBubble";
 import { MessageMenu, type MenuAction } from "./MessageMenu";
+import { ScheduledDialog } from "./Schedule";
 import { chatTitle } from "./ChatList";
 
 const KIND_LABEL: Record<ChatKind, string> = {
@@ -174,6 +175,8 @@ export function MessagePane() {
   const cyclePinned = useApp((s) => s.cyclePinned);
   const setProfileOpen = useApp((s) => s.setProfileOpen);
   const [searchOpen, setSearchOpen] = useState(false);
+  const scheduledCount = useApp((s) => s.scheduled.length);
+  const [scheduledOpen, setScheduledOpen] = useState(false);
   /** Qaysi chat uchun boshlang'ich joy (o'qilmaganlar yoki oxiri) tanlangan */
   const positionedFor = useRef<number | null>(null);
 
@@ -352,6 +355,17 @@ export function MessagePane() {
             )}
           </span>
         </button>
+        {scheduledCount > 0 && (
+          <button
+            className={`${headerButton} gap-1 text-accent`}
+            title="Rejalashtirilgan xabarlar"
+            aria-label={`Rejalashtirilgan xabarlar: ${scheduledCount}`}
+            onClick={() => setScheduledOpen(true)}
+          >
+            <Icon name="clock" />
+            {scheduledCount}
+          </button>
+        )}
         <button
           className={`${headerButton} ${searchOpen ? "bg-accent-soft text-accent" : ""}`}
           title="Chat ichida qidirish"
@@ -510,6 +524,7 @@ export function MessagePane() {
           {notice}
         </p>
       )}
+      {scheduledOpen && <ScheduledDialog onClose={() => setScheduledOpen(false)} />}
       {forwarding && (
         <ForwardDialog
           msgs={forwarding}

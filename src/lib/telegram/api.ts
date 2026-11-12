@@ -301,9 +301,44 @@ async function formatted(source: string) {
   return { text, entities: list };
 }
 
-export async function sendText(chatId: number, text: string, replyTo?: number, silent = false): Promise<MessageItem> {
+/** schedule — kelajakdagi vaqt (ms) yoki "online" (suhbatdosh onlayn bo'lganda). */
+export type Schedule = number | "online";
+
+export async function sendText(
+  chatId: number, text: string, replyTo?: number, silent = false, schedule?: Schedule,
+): Promise<MessageItem> {
   const client = await getClient();
-  return item(await client.sendText(chatId, await formatted(text), { replyTo, silent }));
+  const when = schedule === undefined ? undefined : schedule === "online" ? "online" : new Date(schedule);
+  return item(await client.sendText(chatId, await formatted(text), { replyTo, silent, schedule: when }));
+}
+
+// ---- Rejalashtirilgan xabarlar ----
+
+export async function loadScheduled(chatId: number): Promise<MessageItem[]> {
+  const client = await getClient();
+  const { Long, Message, PeersIndex } = await import("@mtcute/web");
+  const res = await client.call({ _: "messages.getScheduledHistory", peer: await client.resolvePeer(chatId), hash: Long.ZERO });
+  if (res._ === "messages.messagesNotModified") return [];
+  const peers = PeersIndex.from(res);
+  return res.messages
+    .filter((m) => m._ === "message")
+    .map((m) => item(new Message(m, peers, true)))
+    .sort((a, b) => a.date - b.date);
+}
+
+export async function sendScheduledNow(chatId: number, ids: number[]): Promise<MessageItem[]> {
+  const client = await getClient();
+  return (await client.sendScheduled(chatId, ids)).map(item);
+}
+
+export async function deleteScheduled(chatId: number, ids: number[]): Promise<void> {
+  const client = await getClient();
+  await client.deleteScheduledMessages(chatId, ids);
+}
+
+export async function reschedule(chatId: number, messageId: number, when: number): Promise<MessageItem> {
+  const client = await getClient();
+  return item(await client.editMessage({ chatId, message: messageId, scheduleDate: new Date(when) }));
 }
 
 export async function editText(chatId: number, messageId: number, text: string): Promise<MessageItem> {

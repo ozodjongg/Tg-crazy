@@ -5,6 +5,7 @@ import { errorText } from "@/lib/telegram/errors";
 import { forgetChatMedia } from "@/lib/telegram/media";
 import { itemPreview, type ChatItem, type ChatKind, type Me, type MessageItem } from "@/lib/telegram/types";
 import { toMarkdown } from "@/lib/markdown";
+import { formatScheduleLabel } from "@/lib/format";
 import { usePrefs } from "./prefs";
 import { prependOlder, removeMessages, replaceMessage, toggleReaction, upsertMessage } from "@/lib/messages";
 
@@ -55,6 +56,8 @@ interface AppState {
   /** Qadalgan xabarlar (yangidan eskiga) va paneldagi joriy indeks */
   pinned: MessageItem[];
   pinnedIndex: number;
+  /** Joriy chatda rejalashtirilgan xabarlar (vaqt bo'yicha) */
+  scheduled: MessageItem[];
   /** O'ng tomondagi profil paneli */
   profileOpen: boolean;
   /** Yozish maydoni holati: javob berilayotgan yoki tahrirlanayotgan xabar */
@@ -90,8 +93,12 @@ interface AppState {
   setReplyTo: (msg: MessageItem | null) => void;
   setEditing: (msg: MessageItem | null) => void;
   setDraft: (text: string) => void;
-  /** silent — qabul qiluvchida ovozsiz bildirishnoma */
-  send: (text: string, silent?: boolean) => Promise<void>;
+  /** silent — qabul qiluvchida ovozsiz bildirishnoma; schedule — rejalashtirish */
+  send: (text: string, silent?: boolean, schedule?: tg.Schedule) => Promise<void>;
+  refreshScheduled: () => Promise<void>;
+  sendScheduledNow: (ids: number[]) => Promise<void>;
+  deleteScheduled: (ids: number[]) => Promise<void>;
+  reschedule: (id: number, when: number) => Promise<void>;
   sendFile: (file: File, caption: string) => Promise<void>;
   sendSticker: (key: string) => Promise<void>;
   sendGif: (key: string) => Promise<void>;
@@ -212,6 +219,10 @@ export const useApp = create<AppState>((set, get) => {
       lastSender: "", unread: 0,
     };
     const counts = !isActive && !msg.outgoing;
+    // Rejalashtirilgan xabar vaqti kelib yuborildi — ro'yxatni yangilaymiz
+    if (isActive && msg.outgoing && get().scheduled.some((s) => s.date <= Date.now() + 5000)) {
+      void get().refreshScheduled();
+    }
     const updated: ChatItem = {
       ...base,
       ...(isNewest
@@ -269,6 +280,7 @@ export const useApp = create<AppState>((set, get) => {
     pinned: [],
     pinnedIndex: 0,
     profileOpen: false,
+    scheduled: [],
     replyTo: null,
     editing: null,
     typing: {},
@@ -352,9 +364,10 @@ export const useApp = create<AppState>((set, get) => {
       set({
         activeChatId: chatId, messages: [], messagesLoading: chatId !== null, hasMore: false, hasNewer: false,
         loadingOlder: false, loadingNewer: false, replyTo: null, editing: null, error: null, upload: null,
-        draft: chat?.draft ?? "", unreadAnchor: anchor, jumpTarget: null, pinned: [], pinnedIndex: 0,
+        draft: chat?.draft ?? "", unreadAnchor: anchor, jumpTarget: null, pinned: [], pinnedIndex: 0, scheduled: [],
       });
       if (chatId === null) return;
+      void get().refreshScheduled();
       // Qadalgan xabarlar fonda yuklanadi
       tg.loadShared(chatId, "pinned", 20).then(
         (pinned) => get().activeChatId === chatId && set({ pinned, pinnedIndex: 0 }),
@@ -461,7 +474,52 @@ export const useApp = create<AppState>((set, get) => {
     setEditing: (msg) => set({ editing: msg, replyTo: null, draft: msg ? toMarkdown(msg.text, msg.entities) : "" }),
     setDraft: (draft) => set({ draft }),
 
-    async send(text, silent = false) {
+    async refreshScheduled() {
+      const chatId = get().activeChatId;
+      if (chatId === null) return;
+      try {
+        const scheduled = await tg.loadScheduled(chatId);
+        if (get().activeChatId === chatId) set({ scheduled });
+      } catch {
+        // Rejalashtirilganlar ixtiyoriy — xato ko'rsatilmaydi
+      }
+    },
+
+    async sendScheduledNow(ids) {
+      const chatId = get().activeChatId;
+      if (chatId === null) return;
+      try {
+        const sent = await tg.sendScheduledNow(chatId, ids);
+        set({ scheduled: get().scheduled.filter((m) => !ids.includes(m.id)) });
+        sent.forEach((m) => handleIncoming(m));
+      } catch (err) {
+        fail(err);
+      }
+    },
+
+    async deleteScheduled(ids) {
+      const chatId = get().activeChatId;
+      if (chatId === null) return;
+      try {
+        await tg.deleteScheduled(chatId, ids);
+        set({ scheduled: get().scheduled.filter((m) => !ids.includes(m.id)) });
+      } catch (err) {
+        fail(err);
+      }
+    },
+
+    async reschedule(id, when) {
+      const chatId = get().activeChatId;
+      if (chatId === null) return;
+      try {
+        const msg = await tg.reschedule(chatId, id, when);
+        set({ scheduled: [...get().scheduled.filter((m) => m.id !== id), msg].sort((a, b) => a.date - b.date) });
+      } catch (err) {
+        fail(err);
+      }
+    },
+
+    async send(text, silent = false, schedule) {
       const { activeChatId: chatId, editing, replyTo } = get();
       const body = text.trim();
       if (chatId === null || !body) return;
@@ -472,6 +530,18 @@ export const useApp = create<AppState>((set, get) => {
             if (get().activeChatId === chatId) set({ messages: replaceMessage(get().messages, msg) });
           }
           set({ editing: null, draft: "" });
+          return;
+        }
+        if (schedule !== undefined) {
+          const msg = await tg.sendText(chatId, body, replyTo?.id, silent, schedule);
+          set({
+            replyTo: null,
+            draft: "",
+            scheduled: get().activeChatId === chatId ? [...get().scheduled, msg].sort((a, b) => a.date - b.date) : get().scheduled,
+          });
+          get().showNotice(
+            schedule === "online" ? "Suhbatdosh onlayn bo'lganda yuboriladi" : `Rejalashtirildi: ${formatScheduleLabel(schedule)}`,
+          );
           return;
         }
         const msg = await tg.sendText(chatId, body, replyTo?.id, silent);

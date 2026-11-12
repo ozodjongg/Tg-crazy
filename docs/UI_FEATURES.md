@@ -65,7 +65,7 @@ tekshiriladi. Haqiqiy Telegram bilan sinov egasining `api_id` siga bog'liq.
 | Qoralamalarni saqlash (chat almashtirganda yo'qolmaydi, Telegram bilan sinxron) | ✅ |
 | Stiker paneli (o'rnatilgan to'plamlar) | ✅ |
 | Ovozsiz yuborish | ✅ |
-| Vaqtga rejalashtirish va rejalashtirilgan xabarlar ro'yxati | ⬜ |
+| Vaqtga rejalashtirish (tayyor variantlar, aniq vaqt, "onlayn bo'lganda"); ro'yxatda: hozir yuborish, vaqtni o'zgartirish, o'chirish | ✅ |
 | Ovozli xabar yozish: jonli to'lqin, taymer, bekor qilish; Chrome WebM → Ogg/Opus qayta o'rash | ✅ |
 | @mention (username yoki ism bilan) va bot buyruqlari avtoto'ldirish: ↑/↓, Enter/Tab, Esc | ✅ |
 | GIF: saqlangan GIF'lar va qidiruv (@gif orqali), cheksiz aylantirish | ✅ |

@@ -49,3 +49,26 @@ const AVATAR_COLORS = ["#d97757", "#788c5d", "#6a9bcc", "#c2a15b", "#b5677d", "#
 export function avatarColor(id: number): string {
   return AVATAR_COLORS[Math.abs(id) % AVATAR_COLORS.length];
 }
+
+/** Rejalashtirilgan vaqt: "Bugun 21:00", "Ertaga 09:00", "15-noyabr 10:30". */
+export function formatScheduleLabel(ts: number, now = Date.now()): string {
+  const diffDays = Math.round((dayStart(new Date(ts)) - dayStart(new Date(now))) / 864e5);
+  const day = diffDays === 0 ? "Bugun" : diffDays === 1 ? "Ertaga" : formatDayLabel(ts, now);
+  return `${day} ${formatTime(ts)}`;
+}
+
+/** Tez tanlash variantlari: 1 soatdan keyin, bugun kechqurun (o'tmagan bo'lsa), ertaga ertalab. */
+export function schedulePresets(now = Date.now()): { label: string; ts: number }[] {
+  const n = new Date(now);
+  const at = (days: number, h: number) => new Date(n.getFullYear(), n.getMonth(), n.getDate() + days, h, 0).getTime();
+  const out = [{ label: "1 soatdan keyin", ts: Math.ceil((now + 3600e3) / 60e3) * 60e3 }];
+  if (at(0, 20) - now > 30 * 60e3) out.push({ label: "Bugun kechqurun", ts: at(0, 20) });
+  out.push({ label: "Ertaga ertalab", ts: at(1, 9) });
+  return out;
+}
+
+/** <input type="datetime-local"> qiymati (mahalliy vaqt). */
+export function toLocalInput(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
